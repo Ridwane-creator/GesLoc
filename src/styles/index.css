@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+/* Variables de couleurs GesLoc — à ajuster une fois la palette validée par Anaïs */
+:root {
+  --color-a-jour: #16a34a;   /* vert — locataire à jour */
+  --color-retard: #dc2626;   /* rouge — locataire en retard */
+  --color-avance: #2563eb;   /* bleu — locataire en avance */
+  --color-navy: #1f3b57;
+}

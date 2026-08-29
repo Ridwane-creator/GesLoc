@@ -1,0 +1,22 @@
+# dépendances
+node_modules
+
+# variables d'environnement (clés Supabase — NE JAMAIS pousser)
+.env
+.env.local
+
+# build
+dist
+dist-ssr
+
+# logs
+*.log
+npm-debug.log*
+
+# éditeurs
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# système
+.DS_Store
