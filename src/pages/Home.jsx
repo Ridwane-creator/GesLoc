@@ -1,19 +1,14 @@
 import { Link } from 'react-router-dom'
-import heroImage from '../assets/hero.png'
+import heroImage from '../assets/hero.jpg'
 
-// Page d'accueil (landing page), fidèle à la maquette Visily.
-// Boutons "S'inscrire" / "Se connecter" en haut à droite.
-// ⚠️ À vérifier avec ton amie : les chemins /inscription et /login
-// doivent correspondre exactement aux routes qu'elle a déclarées
-// dans routes.jsx pour Signup.jsx et Login.jsx.
 export default function Home() {
   return (
     <div
       className="relative min-h-screen bg-cover bg-center text-white"
       style={{ backgroundImage: `url(${heroImage})` }}
     >
-      {/* Voile sombre pour la lisibilité du texte sur l'image */}
-      <div className="absolute inset-0 bg-gradient-to-br from-indigo-950/90 via-purple-950/85 to-indigo-950/90" />
+      {/* Voile sombre pour la lisibilité du texte sur la photo */}
+      <div className="absolute inset-0 bg-gradient-to-br from-indigo-950/85 via-purple-950/80 to-indigo-950/85" />
 
       <div className="relative z-10 flex min-h-screen flex-col justify-between px-6 py-10 sm:px-12 lg:px-16">
         {/* En-tête : logo à gauche, boutons à droite */}
@@ -73,13 +68,7 @@ export default function Home() {
             ].map((item) => (
               <li key={item.titre} className="flex items-start gap-3">
                 <span className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-400/20 text-indigo-300">
-                  <svg
-                    className="h-3.5 w-3.5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={3}
-                  >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
                 </span>
