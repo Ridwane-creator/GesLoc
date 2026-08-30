@@ -31,6 +31,7 @@ create table if not exists locataires (
   loyer_mensuel_du numeric not null check (loyer_mensuel_du > 0),
   date_entree date not null default current_date,
   date_echeance int check (date_echeance between 1 and 28), -- jour du mois
+  rappels_actifs boolean not null default true, -- rappels automatiques SMS/WhatsApp (hors MVP, colonne prévue à l'avance)
   created_at timestamptz not null default now()
 );
 
