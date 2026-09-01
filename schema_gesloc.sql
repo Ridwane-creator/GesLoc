@@ -217,8 +217,42 @@ end;
 $$;
 
 -- ============================================================
+-- 4. Table Abonnements
+-- Plan choisi par le propriétaire (gratuit/pro/agence).
+-- Paiement simulé pour la démo hackathon — aucune transaction
+-- réelle, aucune donnée bancaire stockée.
+-- ============================================================
+create table if not exists abonnements (
+  id uuid primary key default gen_random_uuid(),
+  proprietaire_id uuid not null references auth.users(id) on delete cascade,
+  plan text not null default 'gratuit' check (plan in ('gratuit', 'pro', 'agence')),
+  mode_paiement text check (mode_paiement in ('mobile_money', 'carte', null)),
+  statut text not null default 'actif' check (statut in ('actif', 'annule')),
+  date_souscription timestamptz not null default now(),
+  date_fin timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_abonnements_proprietaire on abonnements(proprietaire_id);
+
+alter table abonnements enable row level security;
+
+create policy "Abonnement visible par son propriétaire"
+  on abonnements for select
+  using (auth.uid() = proprietaire_id);
+
+create policy "Abonnement créé par l'utilisateur connecté"
+  on abonnements for insert
+  with check (auth.uid() = proprietaire_id);
+
+create policy "Abonnement modifiable par son propriétaire"
+  on abonnements for update
+  using (auth.uid() = proprietaire_id);
+
+-- ============================================================
 -- Vérification rapide après exécution :
 -- select * from logements;
 -- select * from locataires;
 -- select * from paiements;
+-- select * from abonnements;
 -- ============================================================

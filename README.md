@@ -99,6 +99,19 @@ src/
 | date_paiement | date | Date du versement |
 | mois_concerne | date | Mois auquel le paiement est rattaché |
 
+### Table `abonnements`
+| Champ | Type | Description |
+|---|---|---|
+| id | UUID | Identifiant unique |
+| proprietaire_id | UUID | Référence au propriétaire (auth.users.id) |
+| plan | text | `gratuit`, `pro`, ou `agence` |
+| mode_paiement | text | `mobile_money` ou `carte` (simulation, aucune vraie transaction) |
+| statut | text | `actif` ou `annule` |
+| date_souscription | timestamptz | Date de souscription au plan |
+| date_fin | timestamptz | Date de fin (si applicable) |
+
+> Paiement simulé pour la démo hackathon — aucune transaction réelle, aucune donnée bancaire n'est envoyée ni stockée. Pour une vraie mise en production, il faudrait intégrer un vrai prestataire de paiement (ex. Kkiapay pour le Mobile Money en Afrique de l'Ouest, ou Stripe pour la carte bancaire).
+
 > Row Level Security (RLS) est activé sur toutes les tables : un `select` retourne automatiquement uniquement les données du propriétaire connecté, pas besoin de filtrer manuellement par `proprietaire_id` côté frontend.
 
 ## Logique de calcul du solde
