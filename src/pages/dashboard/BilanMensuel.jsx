@@ -1,10 +1,10 @@
-// TODO Clotilde — Bilan mensuel (liste + total collecté)
 import { useState, useEffect, useMemo } from 'react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { supabase } from '../../lib/supabaseClient'
 import { useLogements } from '../../hooks/useLogements'
 import StatusBadge from '../../components/StatusBadge'
+import MiseEnPage from '../../components/MiseEnPage'
 
 const NOMS_MOIS = [
   'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -123,6 +123,7 @@ export default function BilanMensuel() {
   }
 
   return (
+    <MiseEnPage>
     <div className="p-6">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
@@ -210,5 +211,7 @@ export default function BilanMensuel() {
         )}
       </div>
     </div>
+    </MiseEnPage>
   )
 }
+

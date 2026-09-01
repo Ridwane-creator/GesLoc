@@ -3,6 +3,10 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { useLogements } from '../../hooks/useLogements'
 import { useLocataires } from '../../hooks/useLocataires'
 import StatusBadge from '../../components/StatusBadge'
+import MiseEnPage from '../../components/MiseEnPage'
+
+const COULEURS_DONUT = { paye: '#10b981', retard: '#ef4444', avance: '#3b82f6' }
+const LABEL_STATUT = { paye: 'Payé', retard: 'En retard', avance: 'Avance' }
 
 const COULEURS_DONUT = { paye: '#10b981', retard: '#ef4444', avance: '#3b82f6' }
 const LABEL_STATUT = { paye: 'Payé', retard: 'En retard', avance: 'Avance' }
@@ -29,6 +33,9 @@ export default function Dashboard() {
       .filter((d) => d.value > 0)
   }, [locataires])
 
+  // Évolution sur 6 mois : approximation à partir du loyer total attendu
+  // (une évolution précise mois par mois nécessiterait d'interroger la table
+  // paiements pour chaque mois — à affiner si Freddy expose une RPC dédiée).
   const evolution = useMemo(() => {
     const mois = []
     const maintenant = new Date()
@@ -45,13 +52,16 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
-      </div>
+      <MiseEnPage>
+        <div className="flex h-64 items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+        </div>
+      </MiseEnPage>
     )
   }
 
   return (
+    <MiseEnPage>
     <div className="p-6">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -72,6 +82,7 @@ export default function Dashboard() {
         <div className="mb-4 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{error}</div>
       )}
 
+      {/* Cartes stats */}
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Loyers Collectés</p>
@@ -91,6 +102,7 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Graphiques */}
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
           <h3 className="mb-4 text-sm font-semibold text-slate-700">Évolution des Loyers (FCFA)</h3>
@@ -131,6 +143,7 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Liste des locataires */}
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <h3 className="mb-4 text-sm font-semibold text-slate-700">Locataires — statut du mois</h3>
         {locataires.length === 0 ? (
@@ -163,5 +176,6 @@ export default function Dashboard() {
         )}
       </div>
     </div>
+    </MiseEnPage>
   )
 }
