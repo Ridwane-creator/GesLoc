@@ -7,11 +7,9 @@ export default function Home() {
       className="relative min-h-screen bg-cover bg-center text-white"
       style={{ backgroundImage: `url(${heroImage})` }}
     >
-      {/* Voile sombre pour la lisibilité du texte sur la photo */}
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-950/85 via-purple-950/80 to-indigo-950/85" />
 
       <div className="relative z-10 flex min-h-screen flex-col justify-between px-6 py-10 sm:px-12 lg:px-16">
-        {/* En-tête : logo à gauche, boutons à droite */}
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white">
@@ -36,7 +34,6 @@ export default function Home() {
           </div>
         </header>
 
-        {/* Corps principal */}
         <main className="max-w-xl py-16">
           <h1 className="text-4xl font-bold leading-tight sm:text-5xl">
             Gérez votre patrimoine avec{' '}
@@ -81,7 +78,6 @@ export default function Home() {
           </ul>
         </main>
 
-        {/* Pied de page */}
         <footer className="flex items-center justify-between text-xs text-white/60">
           <div className="flex items-center gap-2">
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
