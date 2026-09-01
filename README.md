@@ -88,6 +88,7 @@ src/
 | telephone | text | Contact |
 | loyer_mensuel_du | numeric | Montant du loyer mensuel (FCFA) |
 | date_echeance | date | Jour du mois où le loyer est dû |
+| rappels_actifs | boolean | Active/désactive les rappels automatiques pour ce locataire (fonctionnalité hors MVP, colonne prévue à l'avance) |
 
 ### Table `paiements`
 | Champ | Type | Description |
