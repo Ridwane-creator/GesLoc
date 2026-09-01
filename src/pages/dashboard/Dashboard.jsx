@@ -8,8 +8,6 @@ import MiseEnPage from '../../components/MiseEnPage'
 const COULEURS_DONUT = { paye: '#10b981', retard: '#ef4444', avance: '#3b82f6' }
 const LABEL_STATUT = { paye: 'Payé', retard: 'En retard', avance: 'Avance' }
 
-const COULEURS_DONUT = { paye: '#10b981', retard: '#ef4444', avance: '#3b82f6' }
-const LABEL_STATUT = { paye: 'Payé', retard: 'En retard', avance: 'Avance' }
 
 export default function Dashboard() {
   const { logements } = useLogements()

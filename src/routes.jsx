@@ -1,4 +1,3 @@
-
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Home from './pages/Home'
 import Login from './pages/auth/Login'
@@ -17,7 +16,6 @@ import Abonnement from './pages/abonnement/Abonnement'
 export default function AppRoutes() {
   return (
     <BrowserRouter>
- feature/dashboard
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
@@ -27,21 +25,9 @@ export default function AppRoutes() {
         <Route path="/locataires/:logementId" element={<RouteProtegee><LocatairesList /></RouteProtegee>} />
         <Route path="/dashboard" element={<RouteProtegee><Dashboard /></RouteProtegee>} />
         <Route path="/paiements/nouveau" element={<RouteProtegee><PaiementForm /></RouteProtegee>} />
+        <Route path="/bilans-mensuels" element={<RouteProtegee><BilanMensuel /></RouteProtegee>} />
+        <Route path="/abonnement" element={<RouteProtegee><Abonnement /></RouteProtegee>} />
       </Routes>
-
-     <Routes>
-  <Route path="/" element={<Home />} />
-  <Route path="/login" element={<Login />} />
-  <Route path="/signup" element={<Signup />} />
-
-  <Route path="/logements" element={<RouteProtegee><LogementsList /></RouteProtegee>} />
-  <Route path="/locataires/:logementId" element={<RouteProtegee><LocatairesList /></RouteProtegee>} />
-  <Route path="/dashboard" element={<RouteProtegee><Dashboard /></RouteProtegee>} />
-  <Route path="/paiements/nouveau" element={<RouteProtegee><PaiementForm /></RouteProtegee>} />
-  <Route path="/bilans-mensuels" element={<RouteProtegee><BilanMensuel /></RouteProtegee>} />
-  <Route path="/abonnement" element={<RouteProtegee><Abonnement /></RouteProtegee>} />
-</Routes> 
- main
     </BrowserRouter>
   )
 }
