@@ -1,9 +1,6 @@
+import { useKkiapayListener, ouvrirPaiementKkiapay, confirmerAbonnement } from '../../lib/kkiapay'
 import { useState } from 'react'
 import MiseEnPage from '../../components/MiseEnPage'
-
-// ⚠️ Simulation de paiement pour la démo hackathon — aucune vraie
-// transaction n'est traitée. À remplacer par un vrai prestataire de
-// paiement (ex: Kkiapay, Mobile Money) avant toute mise en production.
 
 const PLANS = [
   { id: 'gratuit', nom: 'Gratuit', prix: 0, description: 'Jusqu\'à 3-4 locataires' },
@@ -13,10 +10,27 @@ const PLANS = [
 
 export default function Abonnement() {
   const [planChoisi, setPlanChoisi] = useState(null)
-  const [etape, setEtape] = useState('plans') // 'plans' | 'paiement' | 'confirmation'
+  const [etape, setEtape] = useState('plans') // 'plans' | 'paiement' | 'verification' | 'confirmation' | 'erreur'
   const [nom, setNom] = useState('')
   const [modePaiement, setModePaiement] = useState('Mobile Money')
   const [numero, setNumero] = useState('')
+  const [messageErreur, setMessageErreur] = useState('')
+
+  // Écoute les paiements confirmés par le widget Kkiapay (déclenché après saisie du code sur le téléphone)
+  useKkiapayListener(async ({ transactionId }) => {
+    setEtape('verification')
+    try {
+      await confirmerAbonnement({
+        transactionId,
+        plan: planChoisi.id,
+        modePaiement: modePaiement === 'Mobile Money' ? 'mobile_money' : 'carte',
+      })
+      setEtape('confirmation')
+    } catch (e) {
+      setMessageErreur(e.message)
+      setEtape('erreur')
+    }
+  })
 
   function choisirPlan(plan) {
     if (plan.prix === 0) return
@@ -26,7 +40,9 @@ export default function Abonnement() {
 
   function validerPaiement(e) {
     e.preventDefault()
-    setEtape('confirmation')
+    // Ouvre le vrai widget Kkiapay (mode sandbox) — la confirmation
+    // arrive ensuite via useKkiapayListener, pas directement ici.
+    ouvrirPaiementKkiapay({ montant: planChoisi.prix, numero })
   }
 
   function recommencer() {
@@ -34,6 +50,7 @@ export default function Abonnement() {
     setEtape('plans')
     setNom('')
     setNumero('')
+    setMessageErreur('')
   }
 
   return (
@@ -112,7 +129,7 @@ export default function Abonnement() {
               </div>
 
               <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                Simulation pour la démo — aucune vraie transaction n'est effectuée.
+                Mode test (sandbox) — aucune vraie transaction n'est débitée, mais le paiement passe réellement par l'API Kkiapay.
               </p>
 
               <button
@@ -125,11 +142,29 @@ export default function Abonnement() {
           </div>
         )}
 
+        {etape === 'verification' && (
+          <div className="max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm text-center">
+            <p className="text-sm text-slate-600">Vérification du paiement en cours...</p>
+          </div>
+        )}
+
+        {etape === 'erreur' && (
+          <div className="max-w-md rounded-xl border border-red-200 bg-white p-6 shadow-sm">
+            <p className="text-sm text-red-600">{messageErreur}</p>
+            <button
+              onClick={() => setEtape('paiement')}
+              className="mt-4 w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              Réessayer
+            </button>
+          </div>
+        )}
+
         {etape === 'confirmation' && planChoisi && (
           <div className="max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-4 flex items-center gap-2 text-emerald-600">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50">✓</span>
-              <span className="font-semibold">Paiement confirmé (simulation)</span>
+              <span className="font-semibold">Paiement confirmé</span>
             </div>
 
             <p className="text-sm text-slate-600">
