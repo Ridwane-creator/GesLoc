@@ -3,7 +3,6 @@ import { NavLink } from 'react-router-dom'
 const LIENS = [
   { to: '/dashboard', label: 'Tableau de Bord' },
   { to: '/logements', label: 'Logements' },
-  { to: '/locataires', label: 'Locataires' },
   { to: '/paiements/nouveau', label: 'Paiements' },
   { to: '/bilans-mensuels', label: 'Bilans Mensuels' },
   { to: '/abonnement', label: 'Abonnement' },
