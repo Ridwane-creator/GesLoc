@@ -20,3 +20,4 @@ npm-debug.log*
 
 # système
 .DS_Store
+supabase/.temp/
