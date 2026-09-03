@@ -1,3 +1,4 @@
+import logo from '../assets/logo.svg'
 import { Link } from 'react-router-dom'
 import heroImage from '../assets/hero.jpg'
 
@@ -12,9 +13,7 @@ export default function Home() {
       <div className="relative z-10 flex min-h-screen flex-col justify-between px-6 py-10 sm:px-12 lg:px-16">
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white">
-              <span className="text-sm font-bold text-indigo-700">G</span>
-            </div>
+            <img src={logo} alt="GesLoc" className="h-9 w-9 rounded-full" />
             <span className="text-lg font-semibold">GesLoc</span>
           </div>
 

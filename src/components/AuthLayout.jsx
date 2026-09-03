@@ -1,4 +1,5 @@
 import { Building2, LineChart, Users } from 'lucide-react';
+import logo from '../assets/logo.svg';
 
 export default function AuthLayout({ children }) {
   return (
@@ -12,7 +13,7 @@ export default function AuthLayout({ children }) {
           }}
         >
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-white/90" />
+            <img src={logo} alt="GesLoc" className="w-8 h-8 rounded-full" />
             <span className="text-lg font-semibold">GesLoc</span>
           </div>
 
