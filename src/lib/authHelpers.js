@@ -1,19 +1,10 @@
 /**
- * Détecte si l'identifiant saisi est un email ou un numéro de téléphone,
- * et retourne l'objet à passer aux méthodes Supabase Auth
- * (signInWithPassword / signUp acceptent { email, password } OU { phone, password }).
+ * Prépare l'objet à passer aux méthodes Supabase Auth (email uniquement
+ * pour l'instant — l'authentification par téléphone nécessiterait un
+ * fournisseur SMS configuré côté Supabase, non activé sur ce projet).
  */
 export function construireIdentifiant(saisie) {
-  const valeur = saisie.trim();
-  const estEmail = valeur.includes('@');
-
-  if (estEmail) {
-    return { email: valeur.toLowerCase() };
-  }
-
-  // Normalisation basique du numéro (retire espaces, tirets, points)
-  const numeroNettoye = valeur.replace(/[\s.-]/g, '');
-  return { phone: numeroNettoye };
+  return { email: saisie.trim().toLowerCase() };
 }
 
 export function messageErreurAuth(erreur) {
@@ -22,10 +13,10 @@ export function messageErreurAuth(erreur) {
   const message = erreur.message || '';
 
   if (message.includes('Invalid login credentials')) {
-    return 'Email/téléphone ou mot de passe incorrect.';
+    return 'Email ou mot de passe incorrect.';
   }
   if (message.includes('User already registered')) {
-    return 'Un compte existe déjà avec cet identifiant.';
+    return 'Un compte existe déjà avec cet email.';
   }
   if (message.includes('Password should be at least')) {
     return 'Le mot de passe doit contenir au moins 6 caractères.';

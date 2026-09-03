@@ -58,12 +58,12 @@ export default function Login() {
       <form onSubmit={gererConnexion} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">
-            Email ou téléphone
+            Email 
           </label>
           <div className="relative">
             <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
-              type="text"
+              type="email"
               value={identifiant}
               onChange={(e) => setIdentifiant(e.target.value)}
               placeholder="exemple@gesloc.com"
