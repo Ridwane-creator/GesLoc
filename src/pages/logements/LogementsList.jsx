@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Building2, Loader2, MapPin, Pencil, Plus, Trash2, Users } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Building2, Loader2, MapPin, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import Modal from '../../components/Modal';
 
 const ETAT_INITIAL_FORMULAIRE = { nom: '', adresse: '' };
 
 export default function LogementsList() {
+  const navigate = useNavigate();
   const [logements, setLogements] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState(null);
@@ -80,7 +81,6 @@ export default function LogementsList() {
     setEnregistrement(true);
 
     if (logementEnEdition) {
-      // Modification
       const { error } = await supabase
         .from('logements')
         .update({ nom: formulaire.nom.trim(), adresse: formulaire.adresse.trim() })
@@ -93,35 +93,33 @@ export default function LogementsList() {
         return;
       }
     } else {
-  // Création
-  const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) {
-    setEnregistrement(false);
-    setErreurFormulaire("Tu dois être connecté(e) pour ajouter un logement.");
-    return;
-  }
+      if (!user) {
+        setEnregistrement(false);
+        setErreurFormulaire("Tu dois être connecté(e) pour ajouter un logement.");
+        return;
+      }
 
-  const { error } = await supabase.from('logements').insert({
-    proprietaire_id: user.id,
-    nom: formulaire.nom.trim(),
-    adresse: formulaire.adresse.trim(),
-  });
+      const { error } = await supabase.from('logements').insert({
+        proprietaire_id: user.id,
+        nom: formulaire.nom.trim(),
+        adresse: formulaire.adresse.trim(),
+      });
 
-  setEnregistrement(false);
+      setEnregistrement(false);
 
-  if (error) {
-    setErreurFormulaire("La création a échoué. Réessaie.");
-    return;
-  }
-}
+      if (error) {
+        setErreurFormulaire("La création a échoué. Réessaie.");
+        return;
+      }
+    }
 
     setModalOuverte(false);
     chargerLogements();
   }
 
   async function gererSuppression(logement) {
-    // On vérifie d'abord si des locataires sont rattachés à ce logement
     const { count, error: erreurComptage } = await supabase
       .from('locataires')
       .select('*', { count: 'exact', head: true })
@@ -161,6 +159,14 @@ export default function LogementsList() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-6 sm:p-8">
       <div className="max-w-5xl mx-auto">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Retour
+        </button>
+
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Logements</h1>
