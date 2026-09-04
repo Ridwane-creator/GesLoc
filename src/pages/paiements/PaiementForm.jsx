@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Loader2, Search, User } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Loader2, Search, Trash2, User } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { useCalculSolde } from '../../hooks/useCalculSolde';
 
@@ -17,6 +17,10 @@ function moisEnCours() {
 function libelleMois(cle) {
   const [annee, mois] = cle.split('-');
   return `${MOIS_LABELS[Number(mois) - 1]} ${annee}`;
+}
+
+function formaterDate(dateIso) {
+  return new Date(dateIso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 export default function NouveauPaiement() {
@@ -36,35 +40,60 @@ export default function NouveauPaiement() {
   const [erreur, setErreur] = useState(null);
   const [succes, setSucces] = useState(false);
 
+  const [historique, setHistorique] = useState([]);
+  const [chargementHistorique, setChargementHistorique] = useState(false);
+  const [suppressionEnCours, setSuppressionEnCours] = useState(null);
+
+  const [soldeLocal, setSoldeLocal] = useState(null);
+  const [statutLocal, setStatutLocal] = useState(null);
+
   const { solde, statut, chargement: chargementSolde } = useCalculSolde(
     locataireSelectionne?.id,
     moisConcerne ? `${moisConcerne}-01` : null
   );
 
+  const soldeAffiche = soldeLocal ?? solde;
+  const statutAffiche = statutLocal ?? statut;
+
   useEffect(() => {
     chargerLocataires();
   }, []);
 
+  useEffect(() => {
+    setSoldeLocal(null);
+    setStatutLocal(null);
+    if (locataireSelectionne) {
+      chargerHistorique(locataireSelectionne.id);
+    } else {
+      setHistorique([]);
+    }
+  }, [locataireSelectionne, moisConcerne]);
+
   async function chargerLocataires() {
     setChargementLocataires(true);
-
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       setChargementLocataires(false);
       return;
     }
-
     const { data, error } = await supabase
       .from('locataires')
       .select('id, nom, telephone, loyer_mensuel_du, logement_id, logements!inner(nom, proprietaire_id)')
       .eq('logements.proprietaire_id', user.id)
       .order('nom', { ascending: true });
-
-    if (!error) {
-      setLocataires(data || []);
-    }
-
+    if (!error) setLocataires(data || []);
     setChargementLocataires(false);
+  }
+
+  async function chargerHistorique(locataireId) {
+    setChargementHistorique(true);
+    const { data, error } = await supabase
+      .from('paiements')
+      .select('id, montant, date_paiement, mois_concerne')
+      .eq('locataire_id', locataireId)
+      .order('date_paiement', { ascending: false });
+    if (!error) setHistorique(data || []);
+    setChargementHistorique(false);
   }
 
   const locatairesFiltres = locataires.filter((l) =>
@@ -101,6 +130,39 @@ export default function NouveauPaiement() {
     }
 
     setSucces(true);
+  }
+
+  async function annulerPaiement(paiement) {
+    const confirmation = window.confirm(
+      `Annuler ce paiement de ${Number(paiement.montant).toLocaleString('fr-FR')} FCFA du ${formaterDate(paiement.date_paiement)} ? Cette action est définitive.`
+    );
+    if (!confirmation) return;
+
+    setSuppressionEnCours(paiement.id);
+
+    const { error } = await supabase.from('paiements').delete().eq('id', paiement.id);
+
+    if (error) {
+      alert("L'annulation a échoué. Réessaie.");
+      setSuppressionEnCours(null);
+      return;
+    }
+
+    setHistorique((precedent) => precedent.filter((p) => p.id !== paiement.id));
+
+    if (locataireSelectionne) {
+      const { data: nouveauSolde } = await supabase.rpc('calculer_solde_locataire', {
+        p_locataire_id: locataireSelectionne.id,
+        p_mois: `${moisConcerne}-01`,
+      });
+
+      if (typeof nouveauSolde === 'number') {
+        setSoldeLocal(nouveauSolde);
+        setStatutLocal(nouveauSolde === 0 ? 'Payé' : nouveauSolde > 0 ? 'En retard' : 'Avance');
+      }
+    }
+
+    setSuppressionEnCours(null);
   }
 
   function nouveauPaiement() {
@@ -157,7 +219,6 @@ export default function NouveauPaiement() {
         </p>
 
         <form onSubmit={gererSoumission}>
-          {/* Étape 1 : sélection du locataire */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-4">
             <h2 className="font-semibold text-slate-900 mb-3">
               1. Sélection du locataire
@@ -217,7 +278,6 @@ export default function NouveauPaiement() {
             </div>
           </div>
 
-          {/* Étape 2 : détails de la transaction */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-4">
             <h2 className="font-semibold text-slate-900 mb-3">
               2. Détails de la transaction
@@ -277,7 +337,6 @@ export default function NouveauPaiement() {
             </div>
           )}
 
-          {/* Récapitulatif / état du solde */}
           {locataireSelectionne && (
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-4">
               <h3 className="font-semibold text-slate-900 mb-3">Récapitulatif</h3>
@@ -299,33 +358,84 @@ export default function NouveauPaiement() {
               </dl>
 
               <div className="mt-4 pt-4 border-t border-slate-100">
-                {chargementSolde && (
+                {chargementSolde && soldeLocal === null && (
                   <p className="text-sm text-slate-400 flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     Calcul du solde en cours...
                   </p>
                 )}
-                {!chargementSolde && solde !== null && (
+                {(!chargementSolde || soldeLocal !== null) && soldeAffiche !== null && (
                   <p className="text-sm">
                     <span className="text-slate-500">État du solde : </span>
                     <span
                       className={`font-semibold ${
-                        statut === 'Payé'
+                        statutAffiche === 'Payé'
                           ? 'text-emerald-600'
-                          : statut === 'En retard'
+                          : statutAffiche === 'En retard'
                           ? 'text-red-600'
                           : 'text-blue-600'
                       }`}
                     >
-                      {statut}
+                      {statutAffiche}
                     </span>{' '}
                     <span className="text-slate-400">
-                      ({Math.abs(solde).toLocaleString('fr-FR')} FCFA{' '}
-                      {statut === 'En retard' ? 'restant dû' : statut === 'Avance' ? "d'avance" : ''})
+                      ({Math.abs(soldeAffiche).toLocaleString('fr-FR')} FCFA{' '}
+                      {statutAffiche === 'En retard' ? 'restant dû' : statutAffiche === 'Avance' ? "d'avance" : ''})
                     </span>
                   </p>
                 )}
               </div>
+            </div>
+          )}
+
+          {locataireSelectionne && (
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-4">
+              <h3 className="font-semibold text-slate-900 mb-3">
+                Historique des paiements — {locataireSelectionne.nom}
+              </h3>
+
+              {chargementHistorique && (
+                <div className="flex items-center justify-center py-6 text-slate-400">
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                  Chargement de l'historique...
+                </div>
+              )}
+
+              {!chargementHistorique && historique.length === 0 && (
+                <p className="text-sm text-slate-500 py-4 text-center">
+                  Aucun paiement enregistré pour ce locataire.
+                </p>
+              )}
+
+              {!chargementHistorique && historique.length > 0 && (
+                <div className="divide-y divide-slate-100">
+                  {historique.map((paiement) => (
+                    <div key={paiement.id} className="flex items-center justify-between py-3">
+                      <div>
+                        <div className="text-sm font-medium text-slate-900">
+                          {Number(paiement.montant).toLocaleString('fr-FR')} FCFA
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          Reçu le {formaterDate(paiement.date_paiement)} — {libelleMois(paiement.mois_concerne.slice(0, 7))}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => annulerPaiement(paiement)}
+                        disabled={suppressionEnCours === paiement.id}
+                        className="flex items-center gap-1.5 text-xs font-medium text-red-500 hover:text-red-700 disabled:opacity-50"
+                      >
+                        {suppressionEnCours === paiement.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5" />
+                        )}
+                        Annuler
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
