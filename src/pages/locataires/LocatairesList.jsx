@@ -4,8 +4,14 @@ import { ArrowLeft, Loader2, Pencil, Phone, Plus, Trash2, Users } from 'lucide-r
 import { supabase } from '../../lib/supabaseClient';
 import Modal from '../../components/Modal';
 import LocataireForm from './LocataireForm';
-import useLocataires from '../../hooks/useLocataires';
+import { useLocataires } from '../../hooks/useLocataires';
 import StatusBadge from '../../components/StatusBadge';
+
+// Fonction pour obtenir le mois actuel au format YYYY-MM-01
+function moisEnCoursPourPaiement() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+}
 
 const ETAT_INITIAL_FORMULAIRE = {
   nom: '',
@@ -18,9 +24,9 @@ export default function LocatairesList() {
   const { logementId } = useParams();
 
   const [logement, setLogement] = useState(null);
-  const { locataires, loading: chargementLocataires, error: erreurLocataires, refresh: refreshLocataires } = useLocataires(logementId);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState(null);
+  const { locataires, loading: chargementLocataires, error: erreurLocataires, refresh: refreshLocataires } = useLocataires(logementId);
 
   const [modalOuverte, setModalOuverte] = useState(false);
   const [locataireEnEdition, setLocataireEnEdition] = useState(null); // null = création
@@ -160,15 +166,18 @@ export default function LocatairesList() {
       return;
     }
 
-    setLocataires((precedent) => precedent.filter((l) => l.id !== locataire.id));
+    // Notifier le hook useLocataires de rafraîchir ses données
+    refreshLocataires();
+
+    // Notifier les autres composants (dashboard, formulaire de paiement) de rafraîchir leurs listes
+    // en déclenchant un événement personnalisé. Cela complète l'abonnement en temps réel
+    // au cas où il y aurait des retards ou des problèmes de connexion.
+    window.dispatchEvent(new Event('locataires-modifiés'));
   }
 
   async function gererBasculeRappels(locataire) {
     const nouvelEtat = !locataire.rappels_actifs;
 
-    setLocataires((precedent) =>
-      precedent.map((l) => (l.id === locataire.id ? { ...l, rappels_actifs: nouvelEtat } : l))
-    );
     setRappelEnCours(locataire.id);
 
     const { error } = await supabase
@@ -179,14 +188,12 @@ export default function LocatairesList() {
     setRappelEnCours(null);
 
     if (error) {
-      setLocataires((precedent) =>
-        precedent.map((l) =>
-          l.id === locataire.id ? { ...l, rappels_actifs: !nouvelEtat } : l
-        )
-      );
       alert(
         "Impossible d'activer/désactiver les rappels. Vérifie que la colonne 'rappels_actifs' existe bien sur la table locataires."
       );
+    } else {
+      // Notifier le hook useLocataires de rafraîchir ses données
+      refreshLocataires();
     }
   }
 
@@ -220,20 +227,20 @@ export default function LocatairesList() {
           </button>
         </div>
 
-        {chargement && (
+        {chargementLocataires && (
           <div className="flex items-center justify-center py-16 text-slate-400">
             <Loader2 className="w-6 h-6 animate-spin mr-2" />
             Chargement des locataires...
           </div>
         )}
 
-        {!chargement && erreur && (
+        {!chargementLocataires && erreurLocataires && (
           <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">
-            {erreur}
+            {erreurLocataires}
           </div>
         )}
 
-        {!chargement && !erreur && locataires.length === 0 && (
+        {!chargementLocataires && !erreurLocataires && locataires.length === 0 && (
           <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
             <Users className="w-10 h-10 text-slate-300 mx-auto mb-3" />
             <p className="text-slate-500 text-sm">
@@ -252,72 +259,95 @@ export default function LocatairesList() {
                   <th className="text-left px-5 py-3 font-medium">Échéance</th>
                   <th className="text-left px-5 py-3 font-medium">Statut</th>
                   <th className="text-left px-5 py-3 font-medium">Rappels</th>
+                  <th className="text-left px-5 py-3 font-medium">Lien de paiement</th>
                   <th className="text-right px-5 py-3 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {locataires.map((locataire) => (
-                  <tr key={locataire.id} className="border-t border-slate-100">
-                    <td className="px-5 py-4">
-                      <div className="font-medium text-slate-900">{locataire.nom}</div>
-                      {locataire.telephone && (
-                        <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
-                          <Phone className="w-3 h-3" />
-                          {locataire.telephone}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-5 py-4 text-slate-700">
-                      {Number(locataire.loyer_mensuel_du).toLocaleString('fr-FR')} FCFA
-                    </td>
-                    <td className="px-5 py-4 text-slate-500">
-                      {locataire.date_echeance || '—'}
-                    </td>
-                    <td className="px-5 py-4">
-                      <StatusBadge statut={locataire.statut} />
-                    </td>
-                    <td className="px-5 py-4">
-                      <button
-                        onClick={() => gererBasculeRappels(locataire)}
-                        disabled={rappelEnCours === locataire.id}
-                        role="switch"
-                        aria-checked={!!locataire.rappels_actifs}
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-50 ${
-                          locataire.rappels_actifs ? 'bg-[#4F46E5]' : 'bg-slate-200'
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                            locataire.rappels_actifs ? 'translate-x-4.5' : 'translate-x-1'
+                {locataires.map((locataire) => {
+                  const baseUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+  const lienPaiement = `${baseUrl}/payer/${locataire.id}/${moisEnCoursPourPaiement()}`;
+                  return (
+                    <tr key={locataire.id} className="border-t border-slate-100">
+                      <td className="px-5 py-4">
+                        <div className="font-medium text-slate-900">{locataire.nom}</div>
+                        {locataire.telephone && (
+                          <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
+                            <Phone className="w-3 h-3" />
+                            {locataire.telephone}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-5 py-4 text-slate-700">
+                        {Number(locataire.loyer_mensuel_du).toLocaleString('fr-FR')} FCFA
+                      </td>
+                      <td className="px-5 py-4 text-slate-500">
+                        {locataire.date_echeance || '—'}
+                      </td>
+                      <td className="px-5 py-4">
+                        <StatusBadge statut={locataire.statut} />
+                      </td>
+                      <td className="px-5 py-4">
+                        <button
+                          onClick={() => gererBasculeRappels(locataire)}
+                          disabled={rappelEnCours === locataire.id}
+                          role="switch"
+                          aria-checked={!!locataire.rappels_actifs}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-50 ${
+                            locataire.rappels_actifs ? 'bg-[#4F46E5]' : 'bg-slate-200'
                           }`}
-                        />
-                      </button>
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => ouvrirModalEdition(locataire)}
-                          className="p-1.5 rounded-md text-slate-400 hover:text-[#4F46E5] hover:bg-indigo-50"
-                          aria-label="Modifier"
                         >
-                          <Pencil className="w-4 h-4" />
+                          <span
+                            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                              locataire.rappels_actifs ? 'translate-x-4.5' : 'translate-x-1'
+                            }`}
+                          />
                         </button>
-                        <button
-                          onClick={() => gererSuppression(locataire)}
-                          disabled={suppressionEnCours === locataire.id}
-                          className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
-                          aria-label="Supprimer"
-                        >
-                          {suppressionEnCours === locataire.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
-                          )}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-5 py-4 text-slate-600 text-sm break-all">
+                        <div className="flex flex-col items-start">
+                          <span className="font-medium break-all text-xs">{lienPaiement}</span>
+                          <button
+                            onClick={(e) => navigator.clipboard.writeText(lienPaiement).then(() => {
+                              // Show temporary success message
+                              const originalText = e.target.innerText;
+                              e.target.innerText = 'Copié !';
+                              setTimeout(() => {
+                                e.target.innerText = originalText;
+                              }, 1500);
+                            })}
+                            className="mt-1 text-xs text-[#4F46E5] hover:underline"
+                          >
+                            Copier lien
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => ouvrirModalEdition(locataire)}
+                            className="p-1.5 rounded-md text-slate-400 hover:text-[#4F46E5] hover:bg-indigo-50"
+                            aria-label="Modifier"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => gererSuppression(locataire)}
+                            disabled={suppressionEnCours === locataire.id}
+                            className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
+                            aria-label="Supprimer"
+                          >
+                            {suppressionEnCours === locataire.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

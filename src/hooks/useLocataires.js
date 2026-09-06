@@ -49,8 +49,12 @@ export function useLocataires(logementId = null) {
     premierJourMoisCourant.setDate(1)
     const moisCourantISO = premierJourMoisCourant.toISOString().slice(0, 10)
 
-    const locatairesAvecStatut = await Promise.all(
-      (locatairesData || []).map(async (locataire) => {
+    const locatairesAvecStatut = []
+
+    // Process each locataire individually to handle potential RPC errors gracefully
+    // (e.g., if a locataire was deleted between the query and RPC calls)
+    for (const locataire of (locatairesData || [])) {
+      try {
         const { data: solde, error: erreurSolde } = await supabase.rpc(
           'calculer_solde_locataire',
           { p_locataire_id: locataire.id, p_mois: moisCourantISO }
@@ -65,14 +69,19 @@ export function useLocataires(logementId = null) {
 
         const logement = (logements || []).find((l) => l.id === locataire.logement_id)
 
-        return {
+        locatairesAvecStatut.push({
           ...locataire,
           logementNom: logement?.nom || '—',
           solde,
           statut,
-        }
-      })
-    )
+        })
+      } catch (error) {
+        // If RPC fails (e.g., locataire was deleted), skip this locataire
+        // It will be filtered out in the next fetch cycle
+        console.warn(`Skipping locataire ${locataire.id} due to RPC error:`, error)
+        continue
+      }
+    }
 
     setLocataires(locatairesAvecStatut)
     setLoading(false)
@@ -80,6 +89,44 @@ export function useLocataires(logementId = null) {
 
   useEffect(() => {
     fetchLocataires()
+
+    // Configuration de l'abonnement en temps réel pour rafraîchir automatiquement les données
+    // lorsqu'il y a des changements dans les tables locataires ou paiements
+    const channels = []
+
+    // Abonnement aux changements sur la table locataires
+    const locatairesChannel = supabase
+      .channel('locataires-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'locataires' },
+        () => {
+          fetchLocataires()
+        }
+      )
+    channels.push(locatairesChannel)
+
+    // Abonnement aux changements sur la table paiements
+    const paiementsChannel = supabase
+      .channel('paiements-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'paiements' },
+        () => {
+          fetchLocataires()
+        }
+      )
+    channels.push(paiementsChannel)
+
+    // Souscription à tous les canaux
+    channels.forEach(channel => channel.subscribe())
+
+    // Nettoyage des abonnements lors du démontage ou lorsqu'il y a un changement de logementId
+    return () => {
+      channels.forEach(channel => {
+        supabase.removeChannel(channel)
+      })
+    }
   }, [logementId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return { locataires, loading, error, refresh: fetchLocataires }

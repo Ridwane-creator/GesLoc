@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts'
 import { useLogements } from '../../hooks/useLogements'
 import { useLocataires } from '../../hooks/useLocataires'
@@ -12,13 +12,28 @@ const LABEL_STATUT = { paye: 'Payé', retard: 'En retard', avance: 'Avance' }
 export default function Dashboard() {
   const { logements } = useLogements()
   const [filtreLogement, setFiltreLogement] = useState('')
-  const { locataires, loading, error } = useLocataires(filtreLogement || null)
+  const { locataires, loading, error, refresh } = useLocataires(filtreLogement || null)
 
-  const totalCollecte = locataires
-    .filter((l) => l.statut === 'paye' || l.statut === 'avance')
-    .reduce((s, l) => s + Number(l.loyer_mensuel_du || 0), 0)
-  const totalAttendu = locataires.reduce((s, l) => s + Number(l.loyer_mensuel_du || 0), 0)
-  const resteAPercevoir = Math.max(totalAttendu - totalCollecte, 0)
+  // Calcul du total collecté : ce qui a été effectivement payé envers le loyer dû
+  // Pour chaque locataire : loyer mensuel - partie positive du solde (ce qui reste dû)
+  const totalCollecte = locataires.reduce((accumulateur, locataire) => {
+    const loyerMensuel = Number(locataire.loyer_mensuel_du || 0);
+    const solde = Number(locataire.solde || 0);
+    const resteDu = Math.max(solde, 0); // Ce qui reste dû (seulement si positif)
+    const paye = loyerMensuel - resteDu; // Ce qui a été payé envers le loyer
+    return accumulateur + paye;
+  }, 0);
+
+  // Total attendu : somme de tous les loyers mensuels dus
+  const totalAttendu = locataires.reduce((accumulateur, locataire) => {
+    return accumulateur + Number(locataire.loyer_mensuel_du || 0);
+  }, 0);
+
+  // Reste à percevoir : somme de ce qui reste dû pour chaque locataire
+  const resteAPercevoir = locataires.reduce((accumulateur, locataire) => {
+    const solde = Number(locataire.solde || 0);
+    return accumulateur + Math.max(solde, 0); // Seulement la partie positive du solde
+  }, 0);
   const nbRetard = locataires.filter((l) => l.statut === 'retard').length
 
   const repartition = useMemo(() => {
@@ -48,6 +63,18 @@ export default function Dashboard() {
     return mois
   }, [totalAttendu, totalCollecte])
 
+  useEffect(() => {
+  // Listen for locataires modifications to refresh the list immediately
+  const handleLocatairesModifies = () => {
+    refresh();
+  };
+
+  window.addEventListener('locataires-modifiés', handleLocatairesModifies);
+  return () => {
+    window.removeEventListener('locataires-modifiés', handleLocatairesModifies);
+  };
+}, []); // Empty deps - listener persists for component lifetime
+
   if (loading) {
     return (
       <MiseEnPage>
@@ -63,7 +90,16 @@ export default function Dashboard() {
     <div className="p-6">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Tableau de Bord</h1>
+          <h1 className="text-2xl font-bold text-slate-900">
+            Tableau de Bord
+            {filtreLogement ? (
+              <span className="ml-2 text-xs text-slate-500">
+                — {logements.find(l => l.id === filtreLogement)?.nom || 'Logement inconnu'}
+              </span>
+            ) : (
+              <span className="ml-2 text-xs text-slate-500"> — Tous les logements</span>
+            )}
+          </h1>
           <p className="text-sm text-slate-500">Aperçu financier de ton patrimoine.</p>
         </div>
         <select

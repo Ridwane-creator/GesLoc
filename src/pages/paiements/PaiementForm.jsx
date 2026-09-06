@@ -57,6 +57,16 @@ export default function NouveauPaiement() {
 
   useEffect(() => {
     chargerLocataires();
+
+    // Listen for locataires modifications to refresh the list immediately
+    const handleLocatairesModifies = () => {
+      chargerLocataires();
+    };
+
+    window.addEventListener('locataires-modifiés', handleLocatairesModifies);
+    return () => {
+      window.removeEventListener('locataires-modifiés', handleLocatairesModifies);
+    };
   }, []);
 
   useEffect(() => {
@@ -130,6 +140,19 @@ export default function NouveauPaiement() {
     }
 
     setSucces(true);
+
+    // Mettre à jour le solde local après un paiement réussi
+    if (locataireSelectionne) {
+      const { data: nouveauSolde } = await supabase.rpc('calculer_solde_locataire', {
+        p_locataire_id: locataireSelectionne.id,
+        p_mois: `${moisConcerne}-01`,
+      });
+
+      if (typeof nouveauSolde === 'number') {
+        setSoldeLocal(nouveauSolde);
+        setStatutLocal(nouveauSolde === 0 ? 'Payé' : nouveauSolde > 0 ? 'En retard' : 'Avance');
+      }
+    }
   }
 
   async function annulerPaiement(paiement) {
@@ -207,7 +230,8 @@ export default function NouveauPaiement() {
       <div className="max-w-4xl mx-auto">
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4"
+          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          aria-label="Retour à la page précédente"
         >
           <ArrowLeft className="w-4 h-4" />
           Retour

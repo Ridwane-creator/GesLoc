@@ -120,19 +120,23 @@ export default function LogementsList() {
   }
 
   async function gererSuppression(logement) {
-    const { count, error: erreurComptage } = await supabase
+    // Vérifier s'il y a des locataires associés à ce logement
+    // En utilisant la même approche que la liste des locataires pour garantir la cohérence
+    const { data: locatairesData, error: erreurLocataires } = await supabase
       .from('locataires')
-      .select('*', { count: 'exact', head: true })
-      .eq('logement_id', logement.id);
+      .select('id')  // Nous n'avons besoin que de savoir s'il y en a au moins un
+      .eq('logement_id', logement.id)
+      .limit(1);     // Un seul résultat suffit pour savoir s'il y en a
 
-    if (erreurComptage) {
+    if (erreurLocataires) {
       alert("Impossible de vérifier les locataires liés à ce logement. Réessaie.");
       return;
     }
 
-    if (count > 0) {
+    if (locatairesData.length > 0) {
+      // On connaît au moins un locataire, on ne peut pas supprimer le logement
       alert(
-        `Impossible de supprimer "${logement.nom}" : ${count} locataire(s) y sont encore rattaché(s). Retire-les d'abord.`
+        `Impossible de supprimer "${logement.nom}" : des locataires y sont encore rattaché(s). Retire-les d'abord.`
       );
       return;
     }
@@ -160,8 +164,9 @@ export default function LogementsList() {
     <div className="min-h-screen bg-[#F8FAFC] p-6 sm:p-8">
       <div className="max-w-5xl mx-auto">
         <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4"
+          onClick={() => navigate('/dashboard')}
+          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          aria-label="Retour au tableau de bord"
         >
           <ArrowLeft className="w-4 h-4" />
           Retour

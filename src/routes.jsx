@@ -6,11 +6,12 @@ import LogementsList from './pages/logements/LogementsList'
 import LocatairesList from './pages/locataires/LocatairesList'
 import Dashboard from './pages/dashboard/Dashboard'
 import PaiementForm from './pages/paiements/PaiementForm'
+import PaiementPublic from './pages/PaiementPublic'
 import RouteProtegee from './components/RouteProtegee'
 import BilanMensuel from './pages/dashboard/BilanMensuel'
 import Abonnement from './pages/abonnement/Abonnement'
 
-// Page d'accueil publique : "/" -> Home, pas de RouteProtegee.
+// Pages publiques : Home et PaiementPublic (lien de paiement direct)
 // Toutes les autres pages internes restent protégées.
 
 export default function AppRoutes() {
@@ -20,6 +21,7 @@ export default function AppRoutes() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/payer/:locataire/:mois" element={<PaiementPublic />} />
 
         <Route path="/logements" element={<RouteProtegee><LogementsList /></RouteProtegee>} />
         <Route path="/locataires/:logementId" element={<RouteProtegee><LocatairesList /></RouteProtegee>} />
