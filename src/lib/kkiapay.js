@@ -11,6 +11,11 @@ import { supabase } from './supabaseClient'
 
 export function useKkiapayListener(onSucces) {
   useEffect(() => {
+    if (typeof window.addEventListener !== 'function') {
+      console.warn('window.addEventListener is not available - Kkiapay listener not set up')
+      return
+    }
+
     function gererSucces(evenement) {
       onSucces(evenement.detail)
     }
@@ -20,6 +25,10 @@ export function useKkiapayListener(onSucces) {
 }
 
 export function ouvrirPaiementKkiapay({ montant, numero }) {
+  if (!window.openKkiapayWidget) {
+    throw new Error('Le SDK Kkiapay n\'est pas chargé. Vérifiez que le script <script src="https://cdn.kkiapay.me/k.js"></script> est présent dans votre fichier index.html')
+  }
+
   window.openKkiapayWidget({
     amount: montant,
     key: import.meta.env.VITE_KKIAPAY_PUBLIC_KEY,

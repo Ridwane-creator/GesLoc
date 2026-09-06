@@ -306,7 +306,14 @@ export default function LocatairesList() {
                       </td>
                       <td className="px-5 py-4 text-slate-600 text-sm break-all">
                         <div className="flex flex-col items-start">
-                          <span className="font-medium break-all text-xs">{lienPaiement}</span>
+                          <a
+                            href={lienPaiement}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-medium break-all text-xs text-[#4F46E5] hover:underline"
+                          >
+                            {lienPaiement}
+                          </a>
                           <button
                             onClick={(e) => navigator.clipboard.writeText(lienPaiement).then(() => {
                               // Show temporary success message

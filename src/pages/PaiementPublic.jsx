@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { ouvrirPaiementKkiapay, useKkiapayListener } from '../lib/kkiapay';
 import { ArrowLeft, CheckCircle2, Loader2, User } from 'lucide-react';
@@ -19,9 +19,11 @@ function formaterDate(dateIso) {
 }
 
 export default function PaiementPublic() {
-  const [searchParams] = useSearchParams();
-  const locataireId = searchParams.get('locataire');
-  const moisConcerne = searchParams.get('mois'); // Format: YYYY-MM-01
+  const { locataireId, moisConcerne } = useParams();
+
+  // Convertir en chaîne de caractères et supprimer les espaces blancs éventuels
+  const cleanLocataireId = locataireId?.toString().trim() || '';
+  const cleanMoisConcerne = moisConcerne?.toString().trim() || '';
 
   const [locataire, setLocataire] = useState(null);
   const [chargement, setChargement] = useState(true);
@@ -30,7 +32,7 @@ export default function PaiementPublic() {
   const [paiementReussi, setPaiementReussi] = useState(false);
 
   useEffect(() => {
-    if (!locataireId || !moisConcerne) {
+    if (!cleanLocataireId || !cleanMoisConcerne) {
       setErreur('Lien invalide : paramètres manquants.');
       setChargement(false);
       return;
@@ -40,7 +42,7 @@ export default function PaiementPublic() {
     supabase
       .from('locataires')
       .select('id, nom, telephone, loyer_mensuel_du, logement_id, logements!inner(nom)')
-      .eq('id', locataireId)
+      .eq('id', cleanLocataireId)
       .single()
       .then(({ data, error }) => {
         if (error) {
@@ -50,13 +52,24 @@ export default function PaiementPublic() {
         }
         setLocataire(data);
         setChargement(false);
+      })
+      .catch((err) => {
+        setErreur(`Erreur lors de la récupération des informations : ${err.message}`);
+        setChargement(false);
       });
-  }, [locataireId, moisConcerne]);
+  }, [cleanLocataireId, cleanMoisConcerne]);
 
   // Écouter le succès du paiement Kkiapay
   useKkiapayListener((detail) => {
     // Le paiement a réussi côté widget, on vérifie avec notre edge function
     setPaiementEnCours(true);
+
+    // Vérifier que les détails de l'événement sont valides
+    if (!detail || !detail.transaction_id) {
+      setErreur('Détails de paiement incomplets reçus.');
+      setPaiementEnCours(false);
+      return;
+    }
 
     supabase.functions.invoke('verify-kkiapay-paiement-locataire', {
       body: {
@@ -91,11 +104,23 @@ export default function PaiementPublic() {
     // Utiliser le loyer mensuel du locataire comme montant à payer
     const montantAPayer = locataire.loyer_mensuel_du;
 
+    // Vérifier que le montant est valide
+    if (typeof montantAPayer !== 'number' || isNaN(montantAPayer) || montantAPayer <= 0) {
+      setErreur('Montant de paiement invalide.');
+      setChargement(false);
+      return;
+    }
+
     // Ouvrir le widget Kkiapay
-    ouvrirPaiementKkiapay({
-      montant: montantAPayer,
-      numero: locataire.telephone // Optionnel : pré-remplir le numéro si disponible
-    });
+    try {
+      ouvrirPaiementKkiapay({
+        montant: montantAPayer,
+        numero: locataire.telephone // Optionnel : pré-remplir le numéro si disponible
+      });
+    } catch (error) {
+      setErreur(`Erreur lors de l'ouverture du widget de paiement : ${error.message}`);
+      setChargement(false);
+    }
   };
 
   if (chargement) {
