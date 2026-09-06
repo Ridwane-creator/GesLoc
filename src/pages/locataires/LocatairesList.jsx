@@ -129,7 +129,7 @@ export default function LocatairesList() {
     }
 
     setModalOuverte(false);
-    chargerDonnees();
+    refreshLocataires();
   }
 
   async function gererSuppression(locataire) {
