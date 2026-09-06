@@ -39,10 +39,25 @@ export function useCalculSolde(locataireId, moisSelectionne) {
       return;
     }
 
-    // ⚠️ À confirmer avec Freddy : on suppose que `data` est directement le
-    // nombre (solde). Si la fonction renvoie un tableau ou un objet, adapter
-    // cette ligne (ex: data[0].solde ou data.solde).
-    const soldeCalcule = Number(data);
+    // Gestion robuste du format de retour de la RPC calculer_solde_locataire
+    let soldeCalcule = null;
+
+    if (Array.isArray(data)) {
+      // Si la RPC retourne un tableau, prendre le premier élément
+      soldeCalcule = Number(data[0]?.solde ?? data[0]);
+    } else if (data && typeof data === 'object') {
+      // Si la RPC retourne un objet, extraire la propriété solde
+      soldeCalcule = Number(data.solde);
+    } else {
+      // Format attendu : nombre direct
+      soldeCalcule = Number(data);
+    }
+
+    // Vérifier que le calcul a produit un nombre valide
+    if (isNaN(soldeCalcule)) {
+      console.warn('Format de retour inattendu de la RPC calculer_solde_locataire:', data);
+      soldeCalcule = 0; // Valeur de secours pour éviter les erreurs en chaîne
+    }
 
     setSolde(soldeCalcule);
     setStatut(soldeCalcule > 0 ? 'En retard' : soldeCalcule === 0 ? 'Payé' : 'Avance');

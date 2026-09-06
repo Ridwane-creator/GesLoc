@@ -4,6 +4,8 @@ import { ArrowLeft, Loader2, Pencil, Phone, Plus, Trash2, Users } from 'lucide-r
 import { supabase } from '../../lib/supabaseClient';
 import Modal from '../../components/Modal';
 import LocataireForm from './LocataireForm';
+import useLocataires from '../../hooks/useLocataires';
+import StatusBadge from '../../components/StatusBadge';
 
 const ETAT_INITIAL_FORMULAIRE = {
   nom: '',
@@ -16,7 +18,7 @@ export default function LocatairesList() {
   const { logementId } = useParams();
 
   const [logement, setLogement] = useState(null);
-  const [locataires, setLocataires] = useState([]);
+  const { locataires, loading: chargementLocataires, error: erreurLocataires, refresh: refreshLocataires } = useLocataires(logementId);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState(null);
 
@@ -30,41 +32,28 @@ export default function LocatairesList() {
   const [rappelEnCours, setRappelEnCours] = useState(null);
 
   useEffect(() => {
-    chargerDonnees();
-  }, [logementId]);
+    async function chargerLogement() {
+      setChargement(true);
+      setErreur(null);
 
-  async function chargerDonnees() {
-    setChargement(true);
-    setErreur(null);
+      const { data: logementData, error: erreurLogement } = await supabase
+        .from('logements')
+        .select('*')
+        .eq('id', logementId)
+        .single();
 
-    const { data: logementData, error: erreurLogement } = await supabase
-      .from('logements')
-      .select('*')
-      .eq('id', logementId)
-      .single();
+      if (erreurLogement) {
+        setErreur("Impossible de trouver ce logement.");
+        setChargement(false);
+        return;
+      }
 
-    if (erreurLogement) {
-      setErreur("Impossible de trouver ce logement.");
+      setLogement(logementData);
       setChargement(false);
-      return;
     }
 
-    setLogement(logementData);
-
-    const { data, error } = await supabase
-      .from('locataires')
-      .select('*')
-      .eq('logement_id', logementId)
-      .order('nom', { ascending: true });
-
-    if (error) {
-      setErreur("Impossible de charger les locataires. Réessaie dans un instant.");
-    } else {
-      setLocataires(data || []);
-    }
-
-    setChargement(false);
-  }
+    chargerLogement();
+  }, [logementId]);
 
   function ouvrirModalCreation() {
     setLocataireEnEdition(null);
@@ -261,6 +250,7 @@ export default function LocatairesList() {
                   <th className="text-left px-5 py-3 font-medium">Locataire</th>
                   <th className="text-left px-5 py-3 font-medium">Loyer mensuel</th>
                   <th className="text-left px-5 py-3 font-medium">Échéance</th>
+                  <th className="text-left px-5 py-3 font-medium">Statut</th>
                   <th className="text-left px-5 py-3 font-medium">Rappels</th>
                   <th className="text-right px-5 py-3 font-medium">Actions</th>
                 </tr>
@@ -282,6 +272,9 @@ export default function LocatairesList() {
                     </td>
                     <td className="px-5 py-4 text-slate-500">
                       {locataire.date_echeance || '—'}
+                    </td>
+                    <td className="px-5 py-4">
+                      <StatusBadge statut={locataire.statut} />
                     </td>
                     <td className="px-5 py-4">
                       <button
