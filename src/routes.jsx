@@ -21,7 +21,8 @@ export default function AppRoutes() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
-       <Route path="/payer/:locataireId/:moisConcerne" element={<PaiementPublic />} />
+        <Route path="/payer/:locataireId/:moisConcerne" element={<PaiementPublic />} />
+
         <Route path="/logements" element={<RouteProtegee><LogementsList /></RouteProtegee>} />
         <Route path="/locataires/:logementId" element={<RouteProtegee><LocatairesList /></RouteProtegee>} />
         <Route path="/dashboard" element={<RouteProtegee><Dashboard /></RouteProtegee>} />

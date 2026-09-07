@@ -60,6 +60,22 @@ export function useLocataires(logementId = null) {
           { p_locataire_id: locataire.id, p_mois: moisCourantISO }
         )
 
+        // Heuristic correction for new tenants: if solde is 0 but loyer_mensuel_du > 0,
+        // and the tenant was created today, assume no payments made yet
+        if (!erreurSolde && solde !== null && solde === 0 && locataire.loyer_mensuel_du > 0) {
+          const createdAt = new Date(locataire.created_at);
+          const today = new Date();
+          // Check if created today (ignoring time)
+          if (
+            createdAt.getDate() === today.getDate() &&
+            createdAt.getMonth() === today.getMonth() &&
+            createdAt.getFullYear() === today.getFullYear()
+          ) {
+            // Assume no payments made yet for current month
+            solde = -locataire.loyer_mensuel_du;
+          }
+        }
+
         let statut = 'retard'
         if (!erreurSolde && solde !== null) {
           if (solde === 0) statut = 'paye'
@@ -121,9 +137,41 @@ export function useLocataires(logementId = null) {
     // Souscription à tous les canaux
     channels.forEach(channel => channel.subscribe())
 
+    // Gestion du Back-Forward Cache (bfcache) et de la visibilité de la page
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        // Page cachée ou entrée dans le Back-Forward Cache : se déconnecter
+        channels.forEach(channel => {
+          try {
+            channel.unsubscribe()
+          } catch (e) {
+            // Ignore errors on unsubscribe
+          }
+        })
+      } else if (document.visibilityState === 'visible') {
+        // Page visible ou sortie du Back-Forward Cache : se reconnecter
+        channels.forEach(channel => {
+          try {
+            channel.subscribe()
+          } catch (e) {
+            // Ignore errors on subscribe
+          }
+        })
+      }
+    }
+
+    // Écouter les changements de visibilité de la page
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
     // Nettoyage des abonnements lors du démontage ou lorsqu'il y a un changement de logementId
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       channels.forEach(channel => {
+        try {
+          channel.unsubscribe()
+        } catch (e) {
+          // Ignore errors on unsubscribe
+        }
         supabase.removeChannel(channel)
       })
     }

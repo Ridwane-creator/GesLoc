@@ -17,8 +17,14 @@ function libelleMois(cle) {
 export default function PaiementPublic() {
   const { locataireId, moisConcerne } = useParams();
 
+  // Convertir en chaîne de caractères et supprimer les espaces blancs éventuels
   const cleanLocataireId = locataireId?.toString().trim() || '';
   const cleanMoisConcerne = moisConcerne?.toString().trim() || '';
+
+  console.log('PAIEMENT_PUBLIC_DEBUG: Raw params - locataireId:', locataireId, 'type:', typeof locataireId);
+  console.log('PAIEMENT_PUBLIC_DEBUG: Raw params - moisConcerne:', moisConcerne, 'type:', typeof moisConcerne);
+  console.log('PAIEMENT_PUBLIC_DEBUG: After cleaning - cleanLocataireId:', cleanLocataireId, 'length:', cleanLocataireId.length);
+  console.log('PAIEMENT_PUBLIC_DEBUG: After cleaning - cleanMoisConcerne:', cleanMoisConcerne, 'length:', cleanMoisConcerne.length);
 
   const [locataire, setLocataire] = useState(null);
   const [chargement, setChargement] = useState(true);
@@ -33,29 +39,46 @@ export default function PaiementPublic() {
       return;
     }
 
-    // Passe par une fonction RPC dédiée (pas un select direct sur la table),
-    // car cette page est publique : le visiteur n'est pas authentifié et
-    // les règles RLS bloqueraient un accès direct à la table locataires.
+    console.log('PAIEMENT_PUBLIC_DEBUG: About to query Supabase with ID:', cleanLocataireId);
+
+    // Récupérer les infos du locataire (en mode public, on limite les données exposées)
     supabase
-      .rpc('obtenir_infos_paiement_public', { p_locataire_id: cleanLocataireId })
+      .from('locataires')
+      .select('id, nom, telephone, loyer_mensuel_du, logement_id, logements(nom)')
+      .filter('id', 'ilike', cleanLocataireId)
+      .single()
       .then(({ data, error }) => {
-        if (error || !data || data.length === 0) {
+        console.log('PAIEMENT_PUBLIC_DEBUG: Supabase response:', { data, error });
+
+        if (error) {
+          console.log('PAIEMENT_PUBLIC_DEBUG: Supabase error:', error);
           setErreur('Locataire introuvable ou lien expiré.');
           setChargement(false);
           return;
         }
-        setLocataire(data[0]);
+        if (!data) {
+          console.log('PAIEMENT_PUBLIC_DEBUG: No data returned');
+          setErreur('Locataire introuvable ou lien expiré.');
+          setChargement(false);
+          return;
+        }
+        console.log('PAIEMENT_PUBLIC_DEBUG: Locataire found:', data);
+        setLocataire(data);
         setChargement(false);
       })
       .catch((err) => {
-        setErreur(`Erreur lors de la récupération des informations : ${err.message}`);
+        console.log('PAIEMENT_PUBLIC_DEBUG: Error during Supabase request:', err);
+        setErreur('Erreur lors de la récupération des informations : ' + err.message);
         setChargement(false);
       });
   }, [cleanLocataireId, cleanMoisConcerne]);
 
+  // Écouter le succès du paiement Kkiapay
   useKkiapayListener((detail) => {
+    // Le paiement a réussi côté widget, on vérifie avec notre edge function
     setPaiementEnCours(true);
 
+    // Vérifier que les détails de l'événement sont valides
     if (!detail || !detail.transaction_id) {
       setErreur('Détails de paiement incomplets reçus.');
       setPaiementEnCours(false);
@@ -66,48 +89,64 @@ export default function PaiementPublic() {
       body: {
         transactionId: detail.transaction_id,
         locataireId: cleanLocataireId,
-        moisConcerne: cleanMoisConcerne,
-      },
+        moisConcerne: cleanMoisConcerne
+      }
     })
-      .then(({ data, error }) => {
-        if (error) {
-          setErreur(`Vérification échouée : ${error.message}`);
-          setPaiementEnCours(false);
-          return;
-        }
+    .then(({ data, error }) => {
+      // Journaliser la réponse pour le débogage (supprimer en production)
+      console.log('Réponse de l\'edge function verify-kkiapay-paiement-locataire:', { data, error });
 
-        const succes = data && (data.succes === true || data.success === true);
-
-        if (succes) {
-          setPaiementReussi(true);
-        } else {
-          setErreur('Paiement non confirmé par nos systèmes.');
-          setPaiementEnCours(false);
-        }
-      })
-      .catch((err) => {
-        setErreur(`Erreur lors de la vérification : ${err.message}`);
+      if (error) {
+        setErreur(`Vérification échouée : ${error.message}`);
         setPaiementEnCours(false);
-      });
+        return;
+      }
+
+      // Vérifier le succès avec différentes possibilités de format de réponse
+      const isSuccessful =
+        data && (
+          data.succes === true ||
+          data.success === true ||
+          (data.data && (data.data.succes === true || data.data.success === true)) ||
+          (typeof data === 'boolean' && data === true)
+        );
+
+      if (isSuccessful) {
+        setPaiementReussi(true);
+      } else {
+        setErreur('Paiement non confirmé par nos systèmes.');
+        setPaiementEnCours(false);
+      }
+    })
+    .catch((err) => {
+      setErreur(`Erreur lors de la vérification : ${err.message}`);
+      console.error('Erreur lors de l\'appel à l\'edge function:', err);
+      setPaiementEnCours(false);
+    });
   });
 
   const gererPaiement = () => {
     if (!locataire) return;
 
+    // Utiliser le loyer mensuel du locataire comme montant à payer
     const montantAPayer = locataire.loyer_mensuel_du;
 
+    // Vérifier que le montant est valide
     if (typeof montantAPayer !== 'number' || isNaN(montantAPayer) || montantAPayer <= 0) {
       setErreur('Montant de paiement invalide.');
+      setChargement(false);
       return;
     }
 
+    // Ouvrir le widget Kkiapay
     try {
       ouvrirPaiementKkiapay({
         montant: montantAPayer,
-        numero: locataire.telephone?.trim() || undefined,
+        numero: locataire.telephone && locataire.telephone.trim() !== '' ? locataire.telephone.trim() : undefined
       });
     } catch (error) {
       setErreur(`Erreur lors de l'ouverture du widget de paiement : ${error.message}`);
+      setChargement(false);
     }
   };
 
@@ -130,6 +169,7 @@ export default function PaiementPublic() {
           <button
             onClick={() => window.history.back()}
             className="w-full py-2.5 rounded-lg border border-slate-200 text-slate-600 text-sm font-medium"
+            aria-label="Retour à la page précédente"
           >
             Retour
           </button>
@@ -155,12 +195,13 @@ export default function PaiementPublic() {
           <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-slate-900 mb-2">Paiement effectué avec succès</h2>
           <p className="text-slate-500 text-sm mb-6">
-            Merci {locataire.nom} ! Votre paiement de {Number(locataire.loyer_mensuel_du).toLocaleString('fr-FR')} FCFA
+            Merci {locataire.nom}! Votre paiement de {Number(locataire.loyer_mensuel_du).toLocaleString('fr-FR')} FCFA
             pour {libelleMois(cleanMoisConcerne)} a bien été enregistré.
           </p>
           <button
             onClick={() => window.location.href = '/'}
             className="w-full py-2.5 rounded-lg border border-slate-200 text-slate-600 text-sm font-medium"
+            aria-label="Retour à l'accueil"
           >
             Retour à l'accueil
           </button>
@@ -183,7 +224,7 @@ export default function PaiementPublic() {
             </h1>
 
             <p className="text-slate-500 mb-6">
-              Logement : {locataire.logement_nom || 'Non spécifié'}
+              Logement : {locataire.logements?.nom || 'Non spécifié'}
             </p>
 
             <div className="bg-[#F8FAFC] rounded-xl p-6 mb-6">
@@ -202,7 +243,7 @@ export default function PaiementPublic() {
                 <div className="flex justify-between">
                   <span className="text-slate-500">Période concernée</span>
                   <span className="font-medium text-slate-900">
-                    {libelleMois(cleanMoisConcerne)}
+                    {libelleMois(moisConcerne)}
                   </span>
                 </div>
               </div>
