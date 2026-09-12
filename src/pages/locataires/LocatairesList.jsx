@@ -7,7 +7,7 @@ import LocataireForm from './LocataireForm';
 import { useLocataires } from '../../hooks/useLocataires';
 import StatusBadge from '../../components/StatusBadge';
 import { useAbonnement } from '../../hooks/useAbonnement';
-import ModalMiseANiveau from '../../components/ModalMiseANiveau';
+import ModalMiseANiveau from '../../components/ModalMiseaniveau';
 
 // Fonction pour obtenir le mois actuel au format YYYY-MM-01
 function moisEnCoursPourPaiement() {

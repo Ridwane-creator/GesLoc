@@ -6,7 +6,7 @@ import { useLogements } from '../../hooks/useLogements'
 import { useAbonnement } from '../../hooks/useAbonnement'
 import StatusBadge from '../../components/StatusBadge'
 import MiseEnPage from '../../components/MiseEnPage'
-import ModalMiseANiveau from '../../components/ModalMiseANiveau'
+import ModalMiseANiveau from '../../components/ModalMiseaniveau'
 import { Lock } from 'lucide-react'
 
 const NOMS_MOIS = [
