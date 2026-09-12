@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Loader2, Pencil, Phone, Plus, Trash2, Users } from 'lucide-react';
+import { ArrowLeft, Loader2, Lock, Pencil, Phone, Plus, Trash2, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import Modal from '../../components/Modal';
 import LocataireForm from './LocataireForm';
 import { useLocataires } from '../../hooks/useLocataires';
 import StatusBadge from '../../components/StatusBadge';
+import { useAbonnement } from '../../hooks/useAbonnement';
+import ModalMiseANiveau from '../../components/ModalMiseANiveau';
 
 // Fonction pour obtenir le mois actuel au format YYYY-MM-01
 function moisEnCoursPourPaiement() {
@@ -15,7 +17,8 @@ function moisEnCoursPourPaiement() {
 
 const ETAT_INITIAL_FORMULAIRE = {
   nom: '',
-  telephone: '',
+  paysCode: '+225', // Défaut à Côte d'Ivoire
+  numeroLocal: '',
   loyer_mensuel_du: '',
   date_echeance: '',
 };
@@ -27,6 +30,7 @@ export default function LocatairesList() {
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState(null);
   const { locataires, loading: chargementLocataires, error: erreurLocataires, refresh: refreshLocataires } = useLocataires(logementId);
+  const { plan, estGratuit, chargement: chargementAbonnement } = useAbonnement();
 
   const [modalOuverte, setModalOuverte] = useState(false);
   const [locataireEnEdition, setLocataireEnEdition] = useState(null); // null = création
@@ -36,6 +40,7 @@ export default function LocatairesList() {
 
   const [suppressionEnCours, setSuppressionEnCours] = useState(null);
   const [rappelEnCours, setRappelEnCours] = useState(null);
+  const [modalMiseANiveauOuverte, setModalMiseANiveauOuverte] = useState(false);
 
   useEffect(() => {
     async function chargerLogement() {
@@ -70,9 +75,23 @@ export default function LocatairesList() {
 
   function ouvrirModalEdition(locataire) {
     setLocataireEnEdition(locataire);
+    // Séparer le numéro de téléphone en code pays et numéro local
+    const telephone = locataire.telephone || '';
+    let paysCode = '+225'; // Défaut
+    let numeroLocal = telephone;
+
+    if (telephone.startsWith('+229')) {
+      paysCode = '+229';
+      numeroLocal = telephone.substring(4); // Enlever '+229'
+    } else if (telephone.startsWith('+225')) {
+      paysCode = '+225';
+      numeroLocal = telephone.substring(4); // Enlever '+225'
+    }
+
     setFormulaire({
       nom: locataire.nom,
-      telephone: locataire.telephone || '',
+      paysCode,
+      numeroLocal: numeroLocal.trim(),
       loyer_mensuel_du: locataire.loyer_mensuel_du ?? '',
       date_echeance: locataire.date_echeance || '',
     });
@@ -83,6 +102,36 @@ export default function LocatairesList() {
   function fermerModal() {
     setModalOuverte(false);
   }
+
+  // Fonction de validation du numéro de téléphone (adaptée pour le nouveau format)
+  const validerTelephone = (paysCode, numeroLocal) => {
+    // Champ obligatoire maintenant
+    if (!paysCode || !numeroLocal) {
+      return false;
+    }
+
+    // Construire le numéro complet pour validation
+    const telephoneComplet = `${paysCode}${numeroLocal.replace(/\s/g, '')}`;
+
+    // Autoriser seulement les chiffres et le signe + en début
+    const regexAutorises = /^[\d\+]+$/;
+    if (!regexAutorises.test(telephoneComplet)) {
+      return false;
+    }
+
+    // Vérifier la longueur selon le pays
+    const chiffres = telephoneComplet.replace(/\+/g, '');
+
+    if (paysCode === '+229') {
+      // Bénin: 8 chiffres après le +229 (total 11 avec indicatif)
+      return chiffres.length === 11 && chiffres.startsWith('229');
+    } else if (paysCode === '+225') {
+      // Côte d'Ivoire: 8 chiffres après le +225 (total 11 avec indicatif)
+      return chiffres.length === 11 && chiffres.startsWith('225');
+    }
+
+    return false;
+  };
 
   async function gererSoumission(evenement) {
     evenement.preventDefault();
@@ -96,12 +145,28 @@ export default function LocatairesList() {
       setErreurFormulaire('Le loyer mensuel doit être un montant valide.');
       return;
     }
+    if (!validerTelephone(formulaire.paysCode, formulaire.numeroLocal)) {
+      setErreurFormulaire('Le numéro de téléphone est invalide. Format attendu : +229 XX XX XX XX ou +225 XX XX XX XX');
+      return;
+    }
+
+    // Vérifier la limite pour les utilisateurs gratuits : max 4 locataires par logement
+    if (estGratuit && !locataireEnEdition && logement) {
+      const locatairesDuLogement = locataires.filter(l => l.logement_id === logement.id);
+      if (locatairesDuLogement.length >= 4) {
+        setErreurFormulaire('Les utilisateurs gratuits sont limités à 4 locataires maximum par logement. Passe à un plan Pro ou Agence pour ajouter plus de locataires.');
+        return;
+      }
+    }
 
     setEnregistrement(true);
 
+    // Construire le numéro de téléphone complet pour l'envoi à la base de données
+    const telephoneComplet = `${formulaire.paysCode}${formulaire.numeroLocal.replace(/\s/g, '')}`;
+
     const donnees = {
       nom: formulaire.nom.trim(),
-      telephone: formulaire.telephone.trim(),
+      telephone: telephoneComplet,
       loyer_mensuel_du: Number(formulaire.loyer_mensuel_du),
       date_echeance: formulaire.date_echeance ? Number(formulaire.date_echeance) : null,
     };
@@ -170,12 +235,20 @@ export default function LocatairesList() {
     refreshLocataires();
 
     // Notifier les autres composants (dashboard, formulaire de paiement) de rafraîchir leurs listes
-    // en déclenchant un événement personnalisé. Cela complète l'abonnement en temps réel
+    // en déclençant un événement personnalisé. Cela complète l'abonnement en temps réel
     // au cas où il y aurait des retards ou des problèmes de connexion.
     window.dispatchEvent(new Event('locataires-modifiés'));
   }
 
   async function gererBasculeRappels(locataire) {
+    // Pour les utilisateurs gratuits : bloquer toute action et montrer le modal de mise à niveau
+    if (estGratuit) {
+      setModalMiseANiveauOuverte(true);
+      return;
+    }
+
+    // Pour les utilisateurs Pro/Agence : comportement normal
+    // Déterminer le nouvel état (true = activer les rappels, false = désactiver)
     const nouvelEtat = !locataire.rappels_actifs;
 
     setRappelEnCours(locataire.id);
@@ -266,7 +339,7 @@ export default function LocatairesList() {
               <tbody>
                 {locataires.map((locataire) => {
                   const baseUrl = import.meta.env.VITE_APP_URL || window.location.origin;
-  const lienPaiement = `${baseUrl}/payer/${locataire.id}/${moisEnCoursPourPaiement()}`;
+                  const lienPaiement = `${baseUrl}/payer/${locataire.id}/${moisEnCoursPourPaiement()}`;
                   return (
                     <tr key={locataire.id} className="border-t border-slate-100">
                       <td className="px-5 py-4">
@@ -292,17 +365,20 @@ export default function LocatairesList() {
                           onClick={() => gererBasculeRappels(locataire)}
                           disabled={rappelEnCours === locataire.id}
                           role="switch"
-                          aria-checked={!!locataire.rappels_actifs}
+                          aria-checked={estGratuit ? false : !!locataire.rappels_actifs}
                           className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-50 ${
-                            locataire.rappels_actifs ? 'bg-[#4F46E5]' : 'bg-slate-200'
+                            estGratuit ? 'bg-slate-200' : locataire.rappels_actifs ? 'bg-[#4F46E5]' : 'bg-slate-200'
                           }`}
                         >
                           <span
                             className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                              locataire.rappels_actifs ? 'translate-x-4.5' : 'translate-x-1'
+                              estGratuit ? 'translate-x-1' : locataire.rappels_actifs ? 'translate-x-4.5' : 'translate-x-1'
                             }`}
                           />
                         </button>
+                        {estGratuit && (
+                          <Lock className="absolute -right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
+                        )}
                       </td>
                       <td className="px-5 py-4 text-slate-600 text-sm break-all">
                         <div className="flex flex-col items-start">
@@ -395,6 +471,12 @@ export default function LocatairesList() {
           </div>
         </form>
       </Modal>
+
+      <ModalMiseANiveau
+        ouverte={modalMiseANiveauOuverte}
+        onFermer={() => setModalMiseANiveauOuverte(false)}
+        fonctionnalite="Les rappels automatiques"
+      />
     </div>
   );
 }

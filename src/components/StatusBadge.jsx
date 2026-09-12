@@ -20,7 +20,8 @@ export default function StatusBadge({ statut }) {
   )
 }
 
-// Rappel de la logique de calcul (voir schema_gesloc.sql) :
-// solde > 0  => statut "retard"
-// solde = 0  => statut "paye"
-// solde < 0  => statut "avance"
+// Rappel de la logique de calcul : comparaison du montant payé avec le montant prévu à ce jour
+// montant prévu = 0 si avant la date d'échéance, sinon = loyer mensuel dû
+//   payé > prévu  => statut "avance" (en avance de paiement)
+//   payé = prévu  => statut "paye" (à jour de paiement)
+//   payé < prévu  => statut "retard" (en retard de paiement)

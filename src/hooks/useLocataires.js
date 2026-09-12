@@ -2,7 +2,12 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
 // Hook pour récupérer les locataires (tous logements confondus) du propriétaire connecté,
-// avec leur statut du mois en cours calculé via la fonction RPC de Freddy.
+// avec leur statut du mois en cours calculé via la fonction RPC (solde cumulé depuis
+// la date d'entrée du locataire — voir calculer_solde_locataire).
+//
+// Convention : solde > 0 => en retard | solde = 0 => à jour | solde < 0 => en avance.
+// On utilise directement cette valeur, sans reconstruction : la fonction SQL fait
+// déjà tout le calcul correctement.
 export function useLocataires(logementId = null) {
   const [locataires, setLocataires] = useState([])
   const [loading, setLoading] = useState(true)
@@ -12,9 +17,10 @@ export function useLocataires(logementId = null) {
     setLoading(true)
     setError(null)
 
-    // 1. Récupérer les logements du propriétaire connecté (RLS filtre déjà)
-    let requeteLogements = supabase.from('logements').select('id, nom')
-    const { data: logements, error: erreurLogements } = await requeteLogements
+    const { data: logements, error: erreurLogements } = await supabase
+      .from('logements')
+      .select('id, nom')
+
     if (erreurLogements) {
       setError(erreurLogements.message)
       setLoading(false)
@@ -31,7 +37,6 @@ export function useLocataires(logementId = null) {
       return
     }
 
-    // 2. Récupérer les locataires de ces logements
     const { data: locatairesData, error: erreurLocataires } = await supabase
       .from('locataires')
       .select('*')
@@ -44,60 +49,36 @@ export function useLocataires(logementId = null) {
       return
     }
 
-    // 3. Calculer le statut du mois courant pour chaque locataire via la RPC de Freddy
-    const premierJourMoisCourant = new Date()
-    premierJourMoisCourant.setDate(1)
-    const moisCourantISO = premierJourMoisCourant.toISOString().slice(0, 10)
+    // Construit directement "AAAA-MM-01" sans passer par toISOString(), pour éviter
+    // tout risque de décalage de fuseau horaire (voir le bug corrigé dans BilanMensuel.jsx).
+    const maintenant = new Date()
+    const mm = String(maintenant.getMonth() + 1).padStart(2, '0')
+    const moisCourantISO = `${maintenant.getFullYear()}-${mm}-01`
 
-    const locatairesAvecStatut = []
-
-    // Process each locataire individually to handle potential RPC errors gracefully
-    // (e.g., if a locataire was deleted between the query and RPC calls)
-    for (const locataire of (locatairesData || [])) {
-      try {
+    const locatairesAvecStatut = await Promise.all(
+      (locatairesData || []).map(async (locataire) => {
         const { data: solde, error: erreurSolde } = await supabase.rpc(
           'calculer_solde_locataire',
           { p_locataire_id: locataire.id, p_mois: moisCourantISO }
         )
 
-        // Heuristic correction for new tenants: if solde is 0 but loyer_mensuel_du > 0,
-        // and the tenant was created today, assume no payments made yet
-        if (!erreurSolde && solde !== null && solde === 0 && locataire.loyer_mensuel_du > 0) {
-          const createdAt = new Date(locataire.created_at);
-          const today = new Date();
-          // Check if created today (ignoring time)
-          if (
-            createdAt.getDate() === today.getDate() &&
-            createdAt.getMonth() === today.getMonth() &&
-            createdAt.getFullYear() === today.getFullYear()
-          ) {
-            // Assume no payments made yet for current month
-            solde = -locataire.loyer_mensuel_du;
-          }
-        }
-
         let statut = 'retard'
-        if (!erreurSolde && solde !== null) {
-          if (solde === 0) statut = 'paye'
-          else if (solde < 0) statut = 'avance'
-          else statut = 'retard'
+        if (!erreurSolde && typeof solde === 'number') {
+          statut = solde > 0 ? 'retard' : solde === 0 ? 'paye' : 'avance'
+        } else {
+          console.warn(`Erreur de calcul du solde pour le locataire ${locataire.id} :`, erreurSolde)
         }
 
         const logement = (logements || []).find((l) => l.id === locataire.logement_id)
 
-        locatairesAvecStatut.push({
+        return {
           ...locataire,
           logementNom: logement?.nom || '—',
           solde,
           statut,
-        })
-      } catch (error) {
-        // If RPC fails (e.g., locataire was deleted), skip this locataire
-        // It will be filtered out in the next fetch cycle
-        console.warn(`Skipping locataire ${locataire.id} due to RPC error:`, error)
-        continue
-      }
-    }
+        }
+      })
+    )
 
     setLocataires(locatairesAvecStatut)
     setLoading(false)
@@ -106,72 +87,43 @@ export function useLocataires(logementId = null) {
   useEffect(() => {
     fetchLocataires()
 
-    // Configuration de l'abonnement en temps réel pour rafraîchir automatiquement les données
-    // lorsqu'il y a des changements dans les tables locataires ou paiements
     const channels = []
 
-    // Abonnement aux changements sur la table locataires
     const locatairesChannel = supabase
       .channel('locataires-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'locataires' },
-        () => {
-          fetchLocataires()
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'locataires' }, () => {
+        fetchLocataires()
+      })
     channels.push(locatairesChannel)
 
-    // Abonnement aux changements sur la table paiements
     const paiementsChannel = supabase
       .channel('paiements-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'paiements' },
-        () => {
-          fetchLocataires()
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'paiements' }, () => {
+        fetchLocataires()
+        window.dispatchEvent(new Event('paiements-modifiés'))
+      })
     channels.push(paiementsChannel)
 
-    // Souscription à tous les canaux
-    channels.forEach(channel => channel.subscribe())
+    channels.forEach((channel) => channel.subscribe())
 
-    // Gestion du Back-Forward Cache (bfcache) et de la visibilité de la page
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        // Page cachée ou entrée dans le Back-Forward Cache : se déconnecter
-        channels.forEach(channel => {
-          try {
-            channel.unsubscribe()
-          } catch (e) {
-            // Ignore errors on unsubscribe
-          }
+        channels.forEach((channel) => {
+          try { channel.unsubscribe() } catch (e) {}
         })
       } else if (document.visibilityState === 'visible') {
-        // Page visible ou sortie du Back-Forward Cache : se reconnecter
-        channels.forEach(channel => {
-          try {
-            channel.subscribe()
-          } catch (e) {
-            // Ignore errors on subscribe
-          }
+        channels.forEach((channel) => {
+          try { channel.subscribe() } catch (e) {}
         })
       }
     }
 
-    // Écouter les changements de visibilité de la page
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
-    // Nettoyage des abonnements lors du démontage ou lorsqu'il y a un changement de logementId
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
-      channels.forEach(channel => {
-        try {
-          channel.unsubscribe()
-        } catch (e) {
-          // Ignore errors on unsubscribe
-        }
+      channels.forEach((channel) => {
+        try { channel.unsubscribe() } catch (e) {}
         supabase.removeChannel(channel)
       })
     }
@@ -179,4 +131,3 @@ export function useLocataires(logementId = null) {
 
   return { locataires, loading, error, refresh: fetchLocataires }
 }
-

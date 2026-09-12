@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Building2, Loader2, MapPin, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import Modal from '../../components/Modal';
+import { useAbonnement } from '../../hooks/useAbonnement';
 
 const ETAT_INITIAL_FORMULAIRE = { nom: '', adresse: '' };
 
@@ -19,6 +20,7 @@ export default function LogementsList() {
   const [erreurFormulaire, setErreurFormulaire] = useState(null);
 
   const [suppressionEnCours, setSuppressionEnCours] = useState(null); // id du logement en cours de suppression
+  const { estGratuit } = useAbonnement();
 
   useEffect(() => {
     chargerLogements();
@@ -76,6 +78,14 @@ export default function LogementsList() {
     if (!formulaire.nom.trim()) {
       setErreurFormulaire('Le nom du logement est obligatoire.');
       return;
+    }
+
+    // Vérifier la limite pour les utilisateurs gratuits : max 3 logements
+    if (estGratuit && !logementEnEdition) {
+      if (logements.length >= 3) {
+        setErreurFormulaire('Les utilisateurs gratuits sont limités à 3 logements maximum. Passe à un plan Pro ou Agence pour ajouter plus de logements.');
+        return;
+      }
     }
 
     setEnregistrement(true);

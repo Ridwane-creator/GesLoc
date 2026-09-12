@@ -11,10 +11,38 @@ const PLANS = [
 export default function Abonnement() {
   const [planChoisi, setPlanChoisi] = useState(null)
   const [etape, setEtape] = useState('plans') // 'plans' | 'paiement' | 'verification' | 'confirmation' | 'erreur'
-  const [nom, setNom] = useState('')
-  const [modePaiement, setModePaiement] = useState('Mobile Money')
-  const [numero, setNumero] = useState('')
+  const [numeroPaiement, setNumeroPaiement] = useState('')
+  const [paysCodePaiement, setPaysCodePaiement] = useState('+225') // Défaut à Côte d'Ivoire
   const [messageErreur, setMessageErreur] = useState('')
+
+  // Fonction de validation du numéro de téléphone pour le paiement
+  const validerTelephonePaiement = (paysCode, numeroLocal) => {
+    if (!paysCode || !numeroLocal) {
+      return false;
+    }
+
+    // Construire le numéro complet pour validation
+    const telephoneComplet = `${paysCode}${numeroLocal.replace(/\s/g, '')}`;
+
+    // Autoriser seulement les chiffres et le signe + en début
+    const regexAutorises = /^[\d\+]+$/;
+    if (!regexAutorises.test(telephoneComplet)) {
+      return false;
+    }
+
+    // Vérifier la longueur selon le pays
+    const chiffres = telephoneComplet.replace(/\+/g, '');
+
+    if (paysCode === '+229') {
+      // Bénin: 8 chiffres après le +229 (total 11 avec indicatif)
+      return chiffres.length === 11 && chiffres.startsWith('229');
+    } else if (paysCode === '+225') {
+      // Côte d'Ivoire: 8 chiffres après le +225 (total 11 avec indicatif)
+      return chiffres.length === 11 && chiffres.startsWith('225');
+    }
+
+    return false;
+  };
 
   // Écoute les paiements confirmés par le widget Kkiapay (déclenché après saisie du code sur le téléphone)
   useKkiapayListener(async ({ transactionId }) => {
@@ -23,7 +51,7 @@ export default function Abonnement() {
       await confirmerAbonnement({
         transactionId,
         plan: planChoisi.id,
-        modePaiement: modePaiement === 'Mobile Money' ? 'mobile_money' : 'carte',
+        modePaiement: 'mobile_money', // On utilise toujours Mobile Money pour le flux direct
       })
       setEtape('confirmation')
     } catch (e) {
@@ -33,23 +61,40 @@ export default function Abonnement() {
   })
 
   function choisirPlan(plan) {
-    if (plan.prix === 0) return
+    if (plan.prix === 0) {
+      // Plan gratuit - pas besoin de paiement
+      setPlanChoisi(plan)
+      setEtape('confirmation') // Aller directement à la confirmation pour le plan gratuit
+      return
+    }
+
+    // Plan payant - aller directement à la saisie du numéro pour le paiement
     setPlanChoisi(plan)
     setEtape('paiement')
+    // Réinitialiser le numéro de téléphone pour le paiement
+    setNumeroPaiement('')
+    setPaysCodePaiement('+225')
   }
 
-  function validerPaiement(e) {
-    e.preventDefault()
-    // Ouvre le vrai widget Kkiapay (mode sandbox) — la confirmation
-    // arrive ensuite via useKkiapayListener, pas directement ici.
-    ouvrirPaiementKkiapay({ montant: planChoisi.prix, numero })
+  function effectuerPaiement() {
+    if (!validerTelephonePaiement(paysCodePaiement, numeroPaiement)) {
+      setMessageErreur('Numéro de téléphone invalide. Format attendu : +229 XX XX XX XX ou +225 XX XX XX XX')
+      return
+    }
+
+    // Construire le numéro de téléphone complet
+    const numeroComplet = `${paysCodePaiement}${numeroPaiement.replace(/\s/g, '')}`
+
+    // Ouvrir directement le widget Kkiapay
+    ouvrirPaiementKkiapay({ montant: planChoisi.prix, numero: numeroComplet })
+    setEtape('verification')
   }
 
   function recommencer() {
     setPlanChoisi(null)
     setEtape('plans')
-    setNom('')
-    setNumero('')
+    setNumeroPaiement('')
+    setPaysCodePaiement('+225')
     setMessageErreur('')
   }
 
@@ -58,7 +103,7 @@ export default function Abonnement() {
       <div className="p-6">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-slate-900">Abonnement</h1>
-          <p className="text-sm text-slate-500">Choisis le plan adapté à la taille de ton patrimoine.</p>
+          <p className="text-slate-500">Choisis le plan adapté à la taille de ton patrimoine.</p>
         </div>
 
         {etape === 'plans' && (
@@ -92,53 +137,45 @@ export default function Abonnement() {
               {planChoisi.prix.toLocaleString('fr-FR')} FCFA / mois
             </p>
 
-            <form onSubmit={validerPaiement} className="mt-5 space-y-4">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">Nom complet</label>
-                <input
-                  type="text"
-                  value={nom}
-                  onChange={(e) => setNom(e.target.value)}
-                  required
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-600"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">Mode de paiement</label>
+            <div className="mt-5 space-y-4">
+              <div className="flex gap-3">
+                <label className="flex-1 mb-1.5 block text-sm font-medium text-slate-700">
+                  {paysCodePaiement === '+229' ? '+229 (Bénin)' : '+225 (Côte d\'Ivoire)'}
+                </label>
                 <select
-                  value={modePaiement}
-                  onChange={(e) => setModePaiement(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-600"
+                  value={paysCodePaiement}
+                  onChange={(e) => setPaysCodePaiement(e.target.value)}
+                  className="flex-1 rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-600"
                 >
-                  <option>Mobile Money</option>
-                  <option>Carte bancaire</option>
+                  <option value="+229">+229 (Bénin)</option>
+                  <option value="+225">+225 (Côte d'Ivoire)</option>
                 </select>
               </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                  {modePaiement === 'Mobile Money' ? 'Numéro Mobile Money' : 'Numéro de carte'}
-                </label>
-                <input
-                  type="text"
-                  value={numero}
-                  onChange={(e) => setNumero(e.target.value)}
-                  placeholder={modePaiement === 'Mobile Money' ? '97 00 00 00' : '•••• •••• •••• ••••'}
-                  required
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-600"
-                />
-              </div>
+              <input
+                type="text"
+                value={numeroPaiement}
+                onChange={(e) => setNumeroPaiement(e.target.value)}
+                placeholder="XX XX XX XX"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-600"
+              />
 
-              <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                Mode test (sandbox) — aucune vraie transaction n'est débitée, mais le paiement passe réellement par l'API Kkiapay.
-              </p>
+              {messageErreur && (
+                <p className="mt-2 text-sm text-red-600">
+                  {messageErreur}
+                </p>
+              )}
+            </div>
 
-              <button
-                type="submit"
-                className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
-              >
-                Payer {planChoisi.prix.toLocaleString('fr-FR')} FCFA
-              </button>
-            </form>
+            <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              Mode test (sandbox) — aucune vraie transaction n'est débitée, mais le paiement passe réellement par l'API Kkiapay.
+            </p>
+
+            <button
+              onClick={effectuerPaiement}
+              className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+            >
+              Payer {planChoisi.prix.toLocaleString('fr-FR')} FCFA
+            </button>
           </div>
         )}
 
@@ -168,8 +205,7 @@ export default function Abonnement() {
             </div>
 
             <p className="text-sm text-slate-600">
-              Plan <strong>{planChoisi.nom}</strong> activé pour {nom || 'l\'utilisateur'} —{' '}
-              {planChoisi.prix.toLocaleString('fr-FR')} FCFA via {modePaiement}.
+              Plan <strong>{planChoisi.nom}</strong> activé avec succès — {planChoisi.prix.toLocaleString('fr-FR')} FCFA via Mobile Money.
             </p>
 
             <button
