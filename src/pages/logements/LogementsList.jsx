@@ -1,26 +1,33 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Building2, Loader2, MapPin, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import Modal from '../../components/Modal';
+import ModalMiseANiveau from '../../components/ModalMiseaniveau';
 import { useAbonnement } from '../../hooks/useAbonnement';
 
 const ETAT_INITIAL_FORMULAIRE = { nom: '', adresse: '' };
 
+// Limite de logements par plan. Agence = illimité (Infinity).
+const LIMITES_LOGEMENTS = { gratuit: 1, pro: 4, agence: Infinity };
+
 export default function LogementsList() {
   const navigate = useNavigate();
+  const { plan, estGratuit } = useAbonnement();
+  const limiteActuelle = LIMITES_LOGEMENTS[plan] ?? LIMITES_LOGEMENTS.gratuit;
+
   const [logements, setLogements] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState(null);
 
   const [modalOuverte, setModalOuverte] = useState(false);
-  const [logementEnEdition, setLogementEnEdition] = useState(null); // null = création
+  const [modalMiseANiveauOuverte, setModalMiseANiveauOuverte] = useState(false);
+  const [logementEnEdition, setLogementEnEdition] = useState(null);
   const [formulaire, setFormulaire] = useState(ETAT_INITIAL_FORMULAIRE);
   const [enregistrement, setEnregistrement] = useState(false);
   const [erreurFormulaire, setErreurFormulaire] = useState(null);
 
-  const [suppressionEnCours, setSuppressionEnCours] = useState(null); // id du logement en cours de suppression
-  const { estGratuit } = useAbonnement();
+  const [suppressionEnCours, setSuppressionEnCours] = useState(null);
 
   useEffect(() => {
     chargerLogements();
@@ -60,6 +67,15 @@ export default function LogementsList() {
     setModalOuverte(true);
   }
 
+  function gererClicNouveauLogement() {
+    // Limite de logements selon le plan actif (1 en gratuit, 4 en pro, illimité en agence).
+    if (logements.length >= limiteActuelle) {
+      setModalMiseANiveauOuverte(true);
+      return;
+    }
+    ouvrirModalCreation();
+  }
+
   function ouvrirModalEdition(logement) {
     setLogementEnEdition(logement);
     setFormulaire({ nom: logement.nom, adresse: logement.adresse || '' });
@@ -80,12 +96,13 @@ export default function LogementsList() {
       return;
     }
 
-    // Vérifier la limite pour les utilisateurs gratuits : max 3 logements
-    if (estGratuit && !logementEnEdition) {
-      if (logements.length >= 3) {
-        setErreurFormulaire('Les utilisateurs gratuits sont limités à 3 logements maximum. Passe à un plan Pro ou Agence pour ajouter plus de logements.');
-        return;
-      }
+    // Double vérification côté soumission (au cas où l'état local serait
+    // désynchronisé), en plus du contrôle déjà fait au clic du bouton.
+    if (!logementEnEdition && logements.length >= limiteActuelle) {
+      setErreurFormulaire(
+        `Ton plan actuel est limité à ${limiteActuelle} logement${limiteActuelle > 1 ? 's' : ''}. Passe à un plan supérieur pour en ajouter davantage.`
+      );
+      return;
     }
 
     setEnregistrement(true);
@@ -130,23 +147,19 @@ export default function LogementsList() {
   }
 
   async function gererSuppression(logement) {
-    // Vérifier s'il y a des locataires associés à ce logement
-    // En utilisant la même approche que la liste des locataires pour garantir la cohérence
-    const { data: locatairesData, error: erreurLocataires } = await supabase
+    const { count, error: erreurComptage } = await supabase
       .from('locataires')
-      .select('id')  // Nous n'avons besoin que de savoir s'il y en a au moins un
-      .eq('logement_id', logement.id)
-      .limit(1);     // Un seul résultat suffit pour savoir s'il y en a
+      .select('*', { count: 'exact', head: true })
+      .eq('logement_id', logement.id);
 
-    if (erreurLocataires) {
+    if (erreurComptage) {
       alert("Impossible de vérifier les locataires liés à ce logement. Réessaie.");
       return;
     }
 
-    if (locatairesData.length > 0) {
-      // On connaît au moins un locataire, on ne peut pas supprimer le logement
+    if (count > 0) {
       alert(
-        `Impossible de supprimer "${logement.nom}" : des locataires y sont encore rattaché(s). Retire-les d'abord.`
+        `Impossible de supprimer "${logement.nom}" : ${count} locataire(s) y sont encore rattaché(s). Retire-les d'abord.`
       );
       return;
     }
@@ -174,9 +187,8 @@ export default function LogementsList() {
     <div className="min-h-screen bg-[#F8FAFC] p-6 sm:p-8">
       <div className="max-w-5xl mx-auto">
         <button
-          onClick={() => navigate('/dashboard')}
-          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          aria-label="Retour au tableau de bord"
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4"
         >
           <ArrowLeft className="w-4 h-4" />
           Retour
@@ -190,7 +202,7 @@ export default function LogementsList() {
             </p>
           </div>
           <button
-            onClick={ouvrirModalCreation}
+            onClick={gererClicNouveauLogement}
             className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-white text-sm font-medium"
             style={{ background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)' }}
           >
@@ -336,6 +348,13 @@ export default function LogementsList() {
           </div>
         </form>
       </Modal>
+
+      <ModalMiseANiveau
+        ouverte={modalMiseANiveauOuverte}
+        onFermer={() => setModalMiseANiveauOuverte(false)}
+        fonctionnalite={`Ajouter plus de ${limiteActuelle === Infinity ? '' : limiteActuelle} logement${limiteActuelle > 1 ? 's' : ''}`}
+        planCible={plan === 'pro' ? 'Agence' : 'Pro'}
+      />
     </div>
   );
 }
