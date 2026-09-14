@@ -4,6 +4,7 @@ import { useLogements } from '../../hooks/useLogements'
 import { useLocataires } from '../../hooks/useLocataires'
 import StatusBadge from '../../components/StatusBadge'
 import MiseEnPage from '../../components/MiseEnPage'
+import BoutonRappelWhatsApp from '../../components/BoutonRappelWhatsApp'
 
 const COULEURS_DONUT = { paye: '#10b981', retard: '#ef4444', avance: '#3b82f6' }
 const LABEL_STATUT = { paye: 'Payé', retard: 'En retard', avance: 'Avance' }
@@ -190,6 +191,7 @@ export default function Dashboard() {
                 <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Logement</th>
                 <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Loyer mensuel</th>
                 <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Statut</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Rappel</th>
               </tr>
             </thead>
             <tbody>
@@ -202,6 +204,9 @@ export default function Dashboard() {
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge statut={l.statut} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <BoutonRappelWhatsApp locataire={l} />
                   </td>
                 </tr>
               ))}
