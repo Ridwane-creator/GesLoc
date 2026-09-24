@@ -13,8 +13,8 @@ export default function Home() {
       <div className="relative z-10 flex min-h-screen flex-col justify-between px-6 py-10 sm:px-12 lg:px-16">
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src={logo} alt="GesLoc" className="h-9 w-9 rounded-full" />
-            <span className="text-lg font-semibold">GesLoc</span>
+            <img src={logo} alt="MyGesLoc" className="h-9 w-9 rounded-full" />
+            <span className="text-lg font-semibold">MyGesLoc</span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -84,7 +84,7 @@ export default function Home() {
             </svg>
             <span>Sécurité de niveau bancaire</span>
           </div>
-          <span>© 2026 GesLoc</span>
+          <span>© 2026 MyGesLoc</span>
         </footer>
       </div>
     </div>

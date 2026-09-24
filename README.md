@@ -1,4 +1,4 @@
-# GesLoc
+# MyGesLoc
 
 Gestion simplifiée des loyers et locataires — projet développé dans le cadre d'un mini hackathon (2-3 jours).
 
@@ -20,7 +20,7 @@ Une plateforme web où le propriétaire ajoute ses logements et locataires, enre
 ```bash
 # 1. Cloner le repo
 git clone <url-du-repo>
-cd gesloc
+cd MyGesLoc
 
 # 2. Installer les dépendances
 npm install
@@ -138,7 +138,7 @@ solde < 0  → statut "avance"
 | OUSSOU Anaïs | Frontend — Écrans principaux (auth, logements, locataires, paiement) |
 | AGO Clotilde | Frontend — Tableau de bord (vue d'ensemble, filtres, bilan mensuel) |
 
-Détail complet des tâches : voir `GesLoc_Fiche_Equipe.docx`.
+Détail complet des tâches : voir `MyGesLoc_Fiche_Equipe.docx`.
 
 ## Convention Git
 

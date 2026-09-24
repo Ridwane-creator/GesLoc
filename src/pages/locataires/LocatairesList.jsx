@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Loader2, Lock, Pencil, Phone, Plus, Trash2, Users } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { Link as RouterLink, useParams } from 'react-router-dom';
+import { ArrowLeft, Check, Copy, Loader2, Lock, Pencil, Phone, Plus, Trash2, Users, Link as LinkIcon } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import Modal from '../../components/Modal';
 import LocataireForm from './LocataireForm';
@@ -8,12 +8,10 @@ import { useLocataires } from '../../hooks/useLocataires';
 import StatusBadge from '../../components/StatusBadge';
 import { useAbonnement } from '../../hooks/useAbonnement';
 import ModalMiseANiveau from '../../components/ModalMiseaniveau';
+import { validatePhone, formatPhone } from '../../lib/utils/phoneUtils';
+import { getCurrentMonthISO } from '../../lib/utils/dateUtils';
 
-// Fonction pour obtenir le mois actuel au format YYYY-MM-01
-function moisEnCoursPourPaiement() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-}
+// Utilisons getCurrentMonthISO() qui retourne déjà YYYY-MM-01
 
 const LIMITE_LOCATAIRES_GRATUIT = 4; // Au total, tous logements confondus.
 
@@ -41,9 +39,20 @@ export default function LocatairesList() {
   const [erreurFormulaire, setErreurFormulaire] = useState(null);
 
   const [suppressionEnCours, setSuppressionEnCours] = useState(null);
+  const [suppressionTousEnCours, setSuppressionTousEnCours] = useState(false);
   const [rappelEnCours, setRappelEnCours] = useState(null);
   const [modalMiseANiveauOuverte, setModalMiseANiveauOuverte] = useState(false);
   const [raisonBlocage, setRaisonBlocage] = useState('');
+  const [copyingId, setCopyingId] = useState(null);
+  const copyingTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyingTimeoutRef.current) {
+        clearTimeout(copyingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     async function chargerLogement() {
@@ -105,28 +114,7 @@ export default function LocatairesList() {
     setModalOuverte(false);
   }
 
-  const validerTelephone = (paysCode, numeroLocal) => {
-    if (!paysCode || !numeroLocal) {
-      return false;
-    }
-
-    const telephoneComplet = `${paysCode}${numeroLocal.replace(/\s/g, '')}`;
-
-    const regexAutorises = /^[\d\+]+$/;
-    if (!regexAutorises.test(telephoneComplet)) {
-      return false;
-    }
-
-    const chiffres = telephoneComplet.replace(/\+/g, '');
-
-    if (paysCode === '+229') {
-      return chiffres.length === 11 && chiffres.startsWith('229');
-    } else if (paysCode === '+225') {
-      return chiffres.length === 11 && chiffres.startsWith('225');
-    }
-
-    return false;
-  };
+  // Fonction de validation du téléphone remplacée par validatePhone provenant de ../lib/utils/phoneUtils
 
   async function gererSoumission(evenement) {
     evenement.preventDefault();
@@ -140,7 +128,7 @@ export default function LocatairesList() {
       setErreurFormulaire('Le loyer mensuel doit être un montant valide.');
       return;
     }
-    if (!validerTelephone(formulaire.paysCode, formulaire.numeroLocal)) {
+    if (!validatePhone(formulaire.paysCode, formulaire.numeroLocal)) {
       setErreurFormulaire('Le numéro de téléphone est invalide. Format attendu : +229 XX XX XX XX ou +225 XX XX XX XX');
       return;
     }
@@ -164,7 +152,7 @@ export default function LocatairesList() {
 
     setEnregistrement(true);
 
-    const telephoneComplet = `${formulaire.paysCode}${formulaire.numeroLocal.replace(/\s/g, '')}`;
+    const telephoneComplet = formatPhone(formulaire.paysCode, formulaire.numeroLocal);
 
     const donnees = {
       nom: formulaire.nom.trim(),
@@ -239,7 +227,7 @@ export default function LocatairesList() {
 
   async function gererBasculeRappels(locataire) {
     if (estGratuit) {
-      setRaisonBlocage('Les rappels automatiques');
+      setRaisonBlocage('Le rappel automatique');
       setModalMiseANiveauOuverte(true);
       return;
     }
@@ -264,16 +252,45 @@ export default function LocatairesList() {
     }
   }
 
+  async function gererSuppressionTousLocataires() {
+    const confirmation = window.confirm(
+      'Supprimer définitivement tous les locataires de ce logement ? Cette action est irréversible.'
+    );
+    if (!confirmation) return;
+
+    setSuppressionTousEnCours(true);
+
+    try {
+      // Delete all locataires for the current logement
+      const { error } = await supabase
+        .from('locataires')
+        .delete()
+        .eq('logement_id', logementId);
+
+      if (error) {
+        throw new Error('Impossible de supprimer les locataires.');
+      }
+
+      // Refresh the list
+      refreshLocataires();
+      window.dispatchEvent(new Event('locataires-modifiés'));
+    } catch (error) {
+      alert(`Erreur lors de la suppression : ${error.message}`);
+    } finally {
+      setSuppressionTousEnCours(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-6 sm:p-8">
       <div className="max-w-5xl mx-auto">
-        <Link
+        <RouterLink
           to="/logements"
           className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-[#4F46E5] mb-4"
         >
           <ArrowLeft className="w-4 h-4" />
           Retour aux logements
-        </Link>
+        </RouterLink>
 
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -284,14 +301,34 @@ export default function LocatairesList() {
               Gère les locataires de ce logement.
             </p>
           </div>
-          <button
-            onClick={ouvrirModalCreation}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-white text-sm font-medium"
-            style={{ background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)' }}
-          >
-            <Plus className="w-4 h-4" />
-            Nouveau locataire
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={ouvrirModalCreation}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-white text-sm font-medium"
+              style={{ background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)' }}
+            >
+              <Plus className="w-4 h-4" />
+              Nouveau locataire
+            </button>
+            <button
+              onClick={gererSuppressionTousLocataires}
+              disabled={suppressionTousEnCours}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-white text-sm font-medium"
+              style={{ background: 'linear-gradient(135deg, #F87171 0%, #EF4444 100%)' }}
+            >
+              {suppressionTousEnCours ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Suppression...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4" />
+                  <span>Supprimer tous</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {chargementLocataires && (
@@ -317,7 +354,7 @@ export default function LocatairesList() {
         )}
 
         {!chargement && !erreur && locataires.length > 0 && (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
                 <tr>
@@ -333,7 +370,7 @@ export default function LocatairesList() {
               <tbody>
                 {locataires.map((locataire) => {
                   const baseUrl = import.meta.env.VITE_APP_URL || window.location.origin;
-                  const lienPaiement = `${baseUrl}/payer/${locataire.id}/${moisEnCoursPourPaiement()}`;
+                  const lienPaiement = `${baseUrl}/payer/${locataire.id}/${getCurrentMonthISO()}`;
                   return (
                     <tr key={locataire.id} className="border-t border-slate-100">
                       <td className="px-5 py-4">
@@ -355,48 +392,71 @@ export default function LocatairesList() {
                         <StatusBadge statut={locataire.statut} />
                       </td>
                       <td className="px-5 py-4">
-                        <button
-                          onClick={() => gererBasculeRappels(locataire)}
-                          disabled={rappelEnCours === locataire.id}
-                          role="switch"
-                          aria-checked={estGratuit ? false : !!locataire.rappels_actifs}
-                          title={estGratuit ? 'Fonctionnalité réservée au plan Pro' : undefined}
-                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-50 ${
-                            estGratuit ? 'bg-slate-200' : locataire.rappels_actifs ? 'bg-[#4F46E5]' : 'bg-slate-200'
-                          }`}
-                        >
-                          {estGratuit ? (
-                            <Lock className="w-3 h-3 text-slate-400 mx-auto" />
-                          ) : (
-                            <span
-                              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                                locataire.rappels_actifs ? 'translate-x-4' : 'translate-x-1'
-                              }`}
-                            />
-                          )}
-                        </button>
-                      </td>
-                      <td className="px-5 py-4 text-slate-600 text-sm break-all">
-                        <div className="flex flex-col items-start">
+  {estGratuit ? (
+    // Free mode: Show locked padlock that shows upgrade modal when clicked
+    <div className="flex items-center justify-center">
+      <div
+        onClick={() => {
+          setRaisonBlocage('Le rappel automatique');
+          setModalMiseANiveauOuverte(true);
+        }}
+        className="w-10 h-10 rounded-full border-2 border-dashed border-slate-400 flex items-center justify-center hover:bg-slate-50 transition-colors cursor-pointer"
+      >
+        <Lock className="w-6 h-6 text-slate-400" />
+      </div>
+    </div>
+  ) : (
+    // Paid mode: Working toggle switch
+    <div className="flex items-center justify-center">
+      <label className="relative inline-flex h-6 w-11 items-center">
+        <input
+          type="checkbox"
+          checked={locataire.rappels_actifs}
+          onChange={(e) => {
+            gererBasculeRappels(locataire);
+          }}
+          disabled={rappelEnCours === locataire.id}
+          className="sr-only peer"
+        />
+        <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-200 dark:peer-focus:ring-indigo-100 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 transition ease-in-out duration-200">
+          <div className={`absolute inset-0 ${
+            locataire.rappels_actifs ? 'translate-x-5 bg-gray-100' : 'translate-x-0'
+          } rounded-full bg-white peer-focus:ring-indigo-600 peer-hover:cursor-pointer transition ease-in-out duration-200 shadow-lg ${!locataire.rappels_actifs ? 'opacity-75' : ''}`} />
+        </div>
+        </label>
+      </div>
+  )}
+</td>
+                      <td className="px-5 py-4 text-slate-600 text-sm">
+                        <div className="flex items-center gap-2">
                           <a
                             href={lienPaiement}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="font-medium break-all text-xs text-[#4F46E5] hover:underline"
+                            className="w-4 h-4 text-[#4F46E5]"
+                            title="Lien de paiement"
                           >
-                            {lienPaiement}
+                            <LinkIcon className="w-4 h-4" />
                           </a>
                           <button
-                            onClick={(e) => navigator.clipboard.writeText(lienPaiement).then(() => {
-                              const originalText = e.target.innerText;
-                              e.target.innerText = 'Copié !';
-                              setTimeout(() => {
-                                e.target.innerText = originalText;
+                            onClick={async () => {
+                              await navigator.clipboard.writeText(lienPaiement);
+                              setCopyingId(locataire.id);
+                              if (copyingTimeoutRef.current) {
+                                clearTimeout(copyingTimeoutRef.current);
+                              }
+                              copyingTimeoutRef.current = setTimeout(() => {
+                                setCopyingId(null);
                               }, 1500);
-                            })}
-                            className="mt-1 text-xs text-[#4F46E5] hover:underline"
+                            }}
+                            className="p-1 text-[#4F46E5] hover:text-[#4F46E5]/80"
+                            title="Copier le lien"
                           >
-                            Copier lien
+                            {copyingId === locataire.id ? (
+                              <Check className="w-4 h-4" />
+                            ) : (
+                              <Copy className="w-4 h-4" />
+                            )}
                           </button>
                         </div>
                       </td>

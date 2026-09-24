@@ -28,6 +28,7 @@ export default function LogementsList() {
   const [erreurFormulaire, setErreurFormulaire] = useState(null);
 
   const [suppressionEnCours, setSuppressionEnCours] = useState(null);
+  const [suppressionTousEnCours, setSuppressionTousEnCours] = useState(false);
 
   useEffect(() => {
     chargerLogements();
@@ -183,11 +184,71 @@ export default function LogementsList() {
     setLogements((precedent) => precedent.filter((l) => l.id !== logement.id));
   }
 
+  async function gererSuppressionTousLogements() {
+    const confirmation = window.confirm(
+      'Supprimer définitivement tous les logements ? Cette action supprimera également tous les locataires associés à ces logements.'
+    );
+    if (!confirmation) return;
+
+    setSuppressionTousEnCours(true);
+
+    try {
+      // Get current user
+      const { data: { user }, error: erreurUtilisateur } = await supabase.auth.getUser();
+      if (erreurUtilisateur || !user) {
+        setSuppressionTousEnCours(false);
+        alert('Tu dois être connecté(e) pour effectuer cette action.');
+        return;
+      }
+
+      // First, delete all locataires associated with user's logements
+      const { data: logementsUtilisateur, error: erreurLogements } = await supabase
+        .from('logements')
+        .select('id')
+        .eq('proprietaire_id', user.id);
+
+      if (erreurLogements) {
+        throw new Error('Impossible de charger les logements.');
+      }
+
+      if (logementsUtilisateur && logementsUtilisateur.length > 0) {
+        const logementIds = logementsUtilisateur.map(l => l.id);
+
+        // Delete locataires associated with these logements
+        const { error: erreurLocataires } = await supabase
+          .from('locataires')
+          .delete()
+          .in('logement_id', logementIds);
+
+        if (erreurLocataires) {
+          throw new Error('Impossible de supprimer les locataires associés.');
+        }
+      }
+
+      // Delete all logements for the user
+      const { error: erreurSuppressionLogements } = await supabase
+        .from('logements')
+        .delete()
+        .eq('proprietaire_id', user.id);
+
+      if (erreurSuppressionLogements) {
+        throw new Error('Impossible de supprimer les logements.');
+      }
+
+      // Refresh the list
+      setLogements([]);
+    } catch (error) {
+      alert(`Erreur lors de la suppression : ${error.message}`);
+    } finally {
+      setSuppressionTousEnCours(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-6 sm:p-8">
       <div className="max-w-5xl mx-auto">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate('/dashboard')}
           className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -201,14 +262,34 @@ export default function LogementsList() {
               Gère la liste de tes biens immobiliers.
             </p>
           </div>
-          <button
-            onClick={gererClicNouveauLogement}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-white text-sm font-medium"
-            style={{ background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)' }}
-          >
-            <Plus className="w-4 h-4" />
-            Ajouter un logement
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={gererClicNouveauLogement}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-white text-sm font-medium"
+              style={{ background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)' }}
+            >
+              <Plus className="w-4 h-4" />
+              Ajouter un logement
+            </button>
+            <button
+              onClick={gererSuppressionTousLogements}
+              disabled={suppressionTousEnCours || logements.length === 0}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-white text-sm font-medium"
+              style={{ background: 'linear-gradient(135deg, #F87171 0%, #EF4444 100%)' }}
+            >
+              {suppressionTousEnCours ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Suppression...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4" />
+                  <span>Supprimer tous</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {chargement && (

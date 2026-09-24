@@ -1,33 +1,6 @@
+import { validatePhone } from '../../lib/utils/phoneUtils';
+
 export default function LocataireForm({ formulaire, setFormulaire }) {
-  // Fonction de validation du numéro de téléphone
-  const validerTelephone = (paysCode, numeroLocal) => {
-    // Champ obligatoire maintenant
-    if (!paysCode || !numeroLocal) {
-      return false;
-    }
-
-    // Construire le numéro complet pour validation
-    const telephoneComplet = `${paysCode}${numeroLocal.replace(/\s/g, '')}`;
-
-    // Autoriser seulement les chiffres et le signe + en début
-    const regexAutorises = /^[\d\+]+$/;
-    if (!regexAutorises.test(telephoneComplet)) {
-      return false;
-    }
-
-    // Vérifier la longueur selon le pays
-    const chiffres = telephoneComplet.replace(/\+/g, '');
-
-    if (paysCode === '+229') {
-      // Bénin: 8 chiffres après le +229 (total 11 avec indicatif)
-      return chiffres.length === 11 && chiffres.startsWith('229');
-    } else if (paysCode === '+225') {
-      // Côte d'Ivoire: 8 chiffres après le +225 (total 11 avec indicatif)
-      return chiffres.length === 11 && chiffres.startsWith('225');
-    }
-
-    return false;
-  };
 
   return (
     <div className="space-y-4">
@@ -61,7 +34,7 @@ export default function LocataireForm({ formulaire, setFormulaire }) {
             className="flex-1 rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-600"
           />
         </div>
-        {(!formulaire.paysCode || !formulaire.numeroLocal || !validerTelephone(formulaire.paysCode, formulaire.numeroLocal)) && formulaire.paysCode !== undefined && (
+        {(!formulaire.paysCode || !formulaire.numeroLocal || !validatePhone(formulaire.paysCode, formulaire.numeroLocal)) && formulaire.paysCode !== undefined && (
           <p className="text-sm text-red-600 mt-1">
             Numéro de téléphone invalide. Format attendu : +229 XX XX XX XX ou +225 XX XX XX XX
           </p>

@@ -3,8 +3,6 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-console.log('DEBUG SUPABASE: URL =', import.meta.env.VITE_SUPABASE_URL)
-console.log('DEBUG SUPABASE: ANON KEY =', import.meta.env.VITE_SUPABASE_ANON_KEY ? '[DÉFINIE]' : '[INDÉFINIE]')
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Erreur : Variables d\'environnement Supabase manquantes !')

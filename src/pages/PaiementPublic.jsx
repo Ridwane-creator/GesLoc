@@ -3,16 +3,7 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { ouvrirPaiementKkiapay, useKkiapayListener } from '../lib/kkiapay';
 import { CheckCircle2, Loader2, User } from 'lucide-react';
-
-const MOIS_LABELS = [
-  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
-];
-
-function libelleMois(cle) {
-  const [annee, mois] = cle.split('-');
-  return `${MOIS_LABELS[Number(mois) - 1]} ${annee}`;
-}
+import { formatMonthLabel } from '../lib/utils/dateUtils';
 
 export default function PaiementPublic() {
   const { locataireId, moisConcerne } = useParams();
@@ -26,6 +17,13 @@ export default function PaiementPublic() {
   const [paiementEnCours, setPaiementEnCours] = useState(false);
   const [paiementReussi, setPaiementReussi] = useState(false);
 
+  // Set page title and log mount
+  useEffect(() => {
+    document.title = 'MyGesLoc';
+    console.log('PaiementPublic mounted');
+  }, []);
+
+  // Fetch locataire info
   useEffect(() => {
     if (!cleanLocataireId || !cleanMoisConcerne) {
       setErreur('Lien invalide : paramètres manquants.');
@@ -90,6 +88,11 @@ export default function PaiementPublic() {
         setPaiementEnCours(false);
       });
   });
+
+  // Set page title
+  useEffect(() => {
+    document.title = 'MyGesLoc';
+  }, []);
 
   const gererPaiement = () => {
     if (!locataire) return;
@@ -156,7 +159,7 @@ export default function PaiementPublic() {
           <h2 className="text-xl font-bold text-slate-900 mb-2">Paiement effectué avec succès</h2>
           <p className="text-slate-500 text-sm mb-6">
             Merci {locataire.nom} ! Votre paiement de {Number(locataire.loyer_mensuel_du).toLocaleString('fr-FR')} FCFA
-            pour {libelleMois(cleanMoisConcerne)} a bien été enregistré.
+            pour {formatMonthLabel(cleanMoisConcerne)} a bien été enregistré.
           </p>
           <button
             onClick={() => window.location.href = '/'}
@@ -169,6 +172,7 @@ export default function PaiementPublic() {
     );
   }
 
+  console.log('Rendering payment form with locataire:', locataire);
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-6 sm:p-8">
       <div className="max-w-2xl mx-auto">
@@ -202,7 +206,7 @@ export default function PaiementPublic() {
                 <div className="flex justify-between">
                   <span className="text-slate-500">Période concernée</span>
                   <span className="font-medium text-slate-900">
-                    {libelleMois(cleanMoisConcerne)}
+                    {formatMonthLabel(cleanMoisConcerne)}
                   </span>
                 </div>
               </div>

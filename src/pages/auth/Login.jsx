@@ -58,7 +58,7 @@ export default function Login() {
       <form onSubmit={gererConnexion} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">
-            Email 
+            Email
           </label>
           <div className="relative">
             <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -110,7 +110,7 @@ export default function Login() {
       </form>
 
       <p className="text-center text-sm text-slate-500 mt-6">
-        Nouveau sur GesLoc ?{' '}
+        Nouveau sur MyGesLoc ?{' '}
         <Link to="/signup" className="text-[#4F46E5] font-medium hover:underline">
           Créer un compte gratuitement
         </Link>

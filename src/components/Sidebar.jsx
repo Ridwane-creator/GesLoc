@@ -15,8 +15,8 @@ function ContenuNavigation({ onNaviguer }) {
   return (
     <>
       <div className="flex items-center gap-2 px-6 py-5">
-        <img src={logo} alt="GesLoc" className="h-9 w-9 rounded-lg" />
-        <span className="text-lg font-semibold text-slate-900">GesLoc</span>
+        <img src={logo} alt="MyGesLoc" className="h-9 w-9 rounded-lg" />
+        <span className="text-lg font-semibold text-slate-900">MyGesLoc</span>
       </div>
 
       <nav className="flex-1 space-y-1 px-3">
@@ -49,8 +49,8 @@ export default function Sidebar() {
       {/* Barre du haut, mobile uniquement */}
       <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white sticky top-0 z-30">
         <div className="flex items-center gap-2">
-          <img src={logo} alt="GesLoc" className="h-8 w-8 rounded-lg" />
-          <span className="text-base font-semibold text-slate-900">GesLoc</span>
+          <img src={logo} alt="MyGesLoc" className="h-8 w-8 rounded-lg" />
+          <span className="text-base font-semibold text-slate-900">MyGesLoc</span>
         </div>
         <button
           onClick={() => setMenuOuvert(true)}

@@ -1,5 +1,5 @@
 -- ============================================================
--- GesLoc — Fonctions Backend & Logique Métier
+-- MyGesLoc — Fonctions Backend & Logique Métier
 -- Développé par Prince Freddy
 -- ============================================================
 
@@ -20,9 +20,9 @@ declare
   v_total_du numeric;
   v_total_paye numeric;
 begin
-  select loyer_mensuel_du, date_trunc('month', date_entree)::date 
+  select loyer_mensuel_du, date_trunc('month', date_entree)::date
   into v_loyer, v_date_entree
-  from locataires 
+  from locataires
   where id = p_locataire_id;
 
   if not found then
@@ -35,7 +35,7 @@ begin
     return 0;
   end if;
 
-  v_nombre_mois := (extract(year from age(v_debut_mois_cible, v_date_entree)) * 12) 
+  v_nombre_mois := (extract(year from age(v_debut_mois_cible, v_date_entree)) * 12)
                  + extract(month from age(v_debut_mois_cible, v_date_entree)) + 1;
 
   v_total_du := v_loyer * v_nombre_mois;
@@ -49,8 +49,34 @@ begin
 end;
 $$;
 
+-- 2. Calcul du Solde pour Plusieurs Locataires à un Mois Donné (version batch)
+create or replace function calculer_soldes_locataires(
+  p_locataire_ids uuid[],
+  p_mois date
+)
+returns table (
+  locataire_id uuid,
+  solde numeric
+)
+language plpgsql
+security definer
+as $$
+declare
+  v_locataire_id uuid;
+begin
+  -- Boucler à travers chaque ID de locataire fourni
+  foreach v_locataire_id in array p_locataire_ids
+  loop
+    -- Calculer le solde pour ce locataire en utilisant la fonction existante
+    solde := calculer_solde_locataire(v_locataire_id, p_mois);
+    locataire_id := v_locataire_id;
+    return next;
+  end loop;
+end;
+$$;
 
--- 2. Vue / Fonction pour le Dashboard de Clotilde (Agrégats & Compteurs)
+
+-- 3. Vue / Fonction pour le Dashboard de Clotilde (Agrégats & Compteurs)
 create or replace function obtenir_resume_tableau_de_bord(p_mois date default current_date)
 returns table (
   total_locataires bigint,
@@ -67,7 +93,7 @@ declare
 begin
   return query
   with soldes as (
-    select 
+    select
       l.id,
       calculer_solde_locataire(l.id, v_debut_mois) as solde
     from locataires l
@@ -82,7 +108,7 @@ begin
     where log.proprietaire_id = auth.uid()
       and date_trunc('month', p.mois_concerne)::date = v_debut_mois
   )
-  select 
+  select
     count(*)::bigint as total_locataires,
     count(*) filter (where s.solde = 0)::bigint as payes,
     count(*) filter (where s.solde > 0)::bigint as en_retard,

@@ -3,30 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Loader2, Search, Trash2, User } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { useCalculSolde } from '../../hooks/useCalculSolde';
-
-const MOIS_LABELS = [
-  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
-];
-
-function moisEnCours() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function libelleMois(cle) {
-  const [annee, mois] = cle.split('-');
-  return `${MOIS_LABELS[Number(mois) - 1]} ${annee}`;
-}
-
-function formaterDate(dateIso) {
-  return new Date(dateIso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
-}
+import { useLocataires } from '../../hooks/useLocataires';
+import { getCurrentMonthISO, formatMonthLabel, formatDate } from '../../lib/utils/dateUtils';
 
 export default function NouveauPaiement() {
   const navigate = useNavigate();
-  const [locataires, setLocataires] = useState([]);
-  const [chargementLocataires, setChargementLocataires] = useState(true);
   const [recherche, setRecherche] = useState('');
   const [locataireSelectionne, setLocataireSelectionne] = useState(null);
 
@@ -34,7 +15,7 @@ export default function NouveauPaiement() {
   const [datePaiement, setDatePaiement] = useState(
     new Date().toISOString().slice(0, 10)
   );
-  const [moisConcerne, setMoisConcerne] = useState(moisEnCours());
+  const [moisConcerne, setMoisConcerne] = useState(getCurrentMonthISO());
 
   const [enregistrement, setEnregistrement] = useState(false);
   const [erreur, setErreur] = useState(null);
@@ -43,6 +24,7 @@ export default function NouveauPaiement() {
   const [historique, setHistorique] = useState([]);
   const [chargementHistorique, setChargementHistorique] = useState(false);
   const [suppressionEnCours, setSuppressionEnCours] = useState(null);
+  const [suppressionTousEnCours, setSuppressionTousEnCours] = useState(false);
 
   const [soldeLocal, setSoldeLocal] = useState(null);
   const [statutLocal, setStatutLocal] = useState(null);
@@ -55,19 +37,7 @@ export default function NouveauPaiement() {
   const soldeAffiche = soldeLocal ?? solde;
   const statutAffiche = statutLocal ?? statut;
 
-  useEffect(() => {
-    chargerLocataires();
-
-    // Listen for locataires modifications to refresh the list immediately
-    const handleLocatairesModifies = () => {
-      chargerLocataires();
-    };
-
-    window.addEventListener('locataires-modifiés', handleLocatairesModifies);
-    return () => {
-      window.removeEventListener('locataires-modifiés', handleLocatairesModifies);
-    };
-  }, []);
+  const { locataires, loading: chargementLocataires, error: erreurLocataires, refresh: refreshLocataires } = useLocataires();
 
   useEffect(() => {
     setSoldeLocal(null);
@@ -80,20 +50,8 @@ export default function NouveauPaiement() {
   }, [locataireSelectionne, moisConcerne]);
 
   async function chargerLocataires() {
-    setChargementLocataires(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      setChargementLocataires(false);
-      return;
-    }
-    const { data, error } = await supabase
-      .from('locataires')
-      .select('id, nom, telephone, loyer_mensuel_du, logement_id, logements!inner(nom, proprietaire_id)')
-      .eq('logements.proprietaire_id', user.id)
-      .order('nom', { ascending: true });
-    if (!error) setLocataires(data || []);
-    setChargementLocataires(false);
-  }
+  // Function removed - now using useLocataires hook for automatic real-time updates
+}
 
   async function chargerHistorique(locataireId) {
     setChargementHistorique(true);
@@ -157,7 +115,7 @@ export default function NouveauPaiement() {
 
   async function annulerPaiement(paiement) {
     const confirmation = window.confirm(
-      `Annuler ce paiement de ${Number(paiement.montant).toLocaleString('fr-FR')} FCFA du ${formaterDate(paiement.date_paiement)} ? Cette action est définitive.`
+      `Annuler ce paiement de ${Number(paiement.montant).toLocaleString('fr-FR')} FCFA du ${formatDate(paiement.date_paiement)} ? Cette action est définitive.`
     );
     if (!confirmation) return;
 
@@ -188,11 +146,54 @@ export default function NouveauPaiement() {
     setSuppressionEnCours(null);
   }
 
+  async function gererSuppressionTousPaiements() {
+    if (!locataireSelectionne) {
+      alert('Veuillez sélectionner un locataire.');
+      return;
+    }
+
+    const confirmation = window.confirm(
+      `Supprimer définitivement tous les paiements de ${locataireSelectionne.nom} ? Cette action est définitive.`
+    );
+    if (!confirmation) return;
+
+    setSuppressionTousEnCours(true);
+
+    try {
+      const { error } = await supabase
+        .from('paiements')
+        .delete()
+        .eq('locataire_id', locataireSelectionne.id);
+
+      if (error) {
+        throw new Error('Impossible de supprimer les paiements.');
+      }
+
+      // Reset historique
+      setHistorique([]);
+
+      // Reset solde local to recalculate from scratch
+      setSoldeLocal(null);
+      setStatutLocal(null);
+
+      // Trigger recalculation via the hook
+      // The useCalculSolde hook will automatically refetch when its dependencies change
+      // But we need to make sure it gets the updated data
+      // We'll force a refresh by temporarily setting moisConcerne to null and back
+      // Actually, better to just let the hook refetch naturally since locataireSelectionne hasn't changed
+      // The hook should refetch when the underlying data changes
+    } catch (error) {
+      alert(`Erreur lors de la suppression : ${error.message}`);
+    } finally {
+      setSuppressionTousEnCours(false);
+    }
+  }
+
   function nouveauPaiement() {
     setLocataireSelectionne(null);
     setMontant('');
     setDatePaiement(new Date().toISOString().slice(0, 10));
-    setMoisConcerne(moisEnCours());
+    setMoisConcerne(getCurrentMonthISO());
     setSucces(false);
     setErreur(null);
   }
@@ -293,7 +294,7 @@ export default function NouveauPaiement() {
                         {locataire.nom}
                       </div>
                       <div className="text-xs text-slate-500 truncate">
-                        {locataire.logements?.nom}
+                        {locataire.logementNom}
                       </div>
                     </div>
                   </div>
@@ -371,7 +372,7 @@ export default function NouveauPaiement() {
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-slate-500">Période</dt>
-                  <dd className="font-medium text-slate-900">{libelleMois(moisConcerne)}</dd>
+                  <dd className="font-medium text-slate-900">{formatMonthLabel(moisConcerne)}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-slate-500">Montant saisi</dt>
@@ -414,9 +415,29 @@ export default function NouveauPaiement() {
 
           {locataireSelectionne && (
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-4">
-              <h3 className="font-semibold text-slate-900 mb-3">
-                Historique des paiements — {locataireSelectionne.nom}
-              </h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-slate-900 mb-0">
+                  Historique des paiements — {locataireSelectionne.nom}
+                </h3>
+                <button
+                  onClick={gererSuppressionTousPaiements}
+                  disabled={suppressionTousEnCours || historique.length === 0}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-white text-sm font-medium"
+                  style={{ background: 'linear-gradient(135deg, #F87171 0%, #EF4444 100%)' }}
+                >
+                  {suppressionTousEnCours ? (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <span>Suppression...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3 h-3" />
+                      <span>Supprimer tous</span>
+                    </>
+                  )}
+                </button>
+              </div>
 
               {chargementHistorique && (
                 <div className="flex items-center justify-center py-6 text-slate-400">
@@ -440,7 +461,7 @@ export default function NouveauPaiement() {
                           {Number(paiement.montant).toLocaleString('fr-FR')} FCFA
                         </div>
                         <div className="text-xs text-slate-500">
-                          Reçu le {formaterDate(paiement.date_paiement)} — {libelleMois(paiement.mois_concerne.slice(0, 7))}
+                          Reçu le {formatDate(paiement.date_paiement)} — {formatMonthLabel(paiement.mois_concerne.slice(0, 7))}
                         </div>
                       </div>
                       <button

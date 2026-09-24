@@ -13,8 +13,8 @@ export default function AuthLayout({ children }) {
           }}
         >
           <div className="flex items-center gap-2">
-            <img src={logo} alt="GesLoc" className="w-8 h-8 rounded-full" />
-            <span className="text-lg font-semibold">GesLoc</span>
+            <img src={logo} alt="MyGesLoc" className="w-8 h-8 rounded-full" />
+            <span className="text-lg font-semibold">MyGesLoc</span>
           </div>
 
           <div>
@@ -41,7 +41,7 @@ export default function AuthLayout({ children }) {
             </ul>
           </div>
 
-          <p className="text-xs text-white/60">© 2026 GesLoc</p>
+          <p className="text-xs text-white/60">© 2026 MyGesLoc</p>
         </div>
 
         {/* Formulaire, à droite */}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { supabase } from '../../lib/supabaseClient'
@@ -8,13 +8,12 @@ import StatusBadge from '../../components/StatusBadge'
 import MiseEnPage from '../../components/MiseEnPage'
 import ModalMiseANiveau from '../../components/ModalMiseaniveau'
 import { Lock } from 'lucide-react'
+import { getStatusConfig } from '../../lib/utils/statusConstants'
 
 const NOMS_MOIS = [
   'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
 ]
-
-const LABEL_STATUT = { paye: 'À jour', retard: 'En retard', avance: 'En avance' }
 
 export default function BilanMensuel() {
   const { logements } = useLogements()
@@ -34,10 +33,11 @@ export default function BilanMensuel() {
     return `${annee}-${mm}-01`
   }, [annee, moisIndex])
 
-  async function chargerBilan() {
+  const chargerBilan = useCallback(async () => {
     setLoading(true)
     setError(null)
 
+    // 1. Get logement IDs
     const idsLogements = logements.map((l) => l.id)
     if (idsLogements.length === 0) {
       setLignes([])
@@ -45,9 +45,17 @@ export default function BilanMensuel() {
       return
     }
 
-    const { data: locataires, error: erreurLocataires } = await supabase
+    // 2. Fetch locataires with logement join to get logementNom
+    const { data: locatairesData, error: erreurLocataires } = await supabase
       .from('locataires')
-      .select('*')
+      .select(`
+        id,
+        nom,
+        loyer_mensuel_du,
+        logements!inner (
+          nom
+        )
+      `)
       .in('logement_id', idsLogements)
 
     if (erreurLocataires) {
@@ -56,62 +64,78 @@ export default function BilanMensuel() {
       return
     }
 
-    const bilan = await Promise.all(
-      (locataires || []).map(async (locataire) => {
-        // Statut = interprétation directe du solde cumulé renvoyé par la fonction SQL.
-        // Convention : positif = retard, zéro = à jour, négatif = avance.
-        const { data: solde, error: erreurSolde } = await supabase.rpc('calculer_solde_locataire', {
-          p_locataire_id: locataire.id,
-          p_mois: moisISO,
-        })
-
-        let statut = 'retard'
-        if (!erreurSolde && typeof solde === 'number') {
-          statut = solde > 0 ? 'retard' : solde === 0 ? 'paye' : 'avance'
-        }
-
-        // "Payé" affiché = uniquement les paiements enregistrés PILE pour ce mois
-        // précis (donnée distincte du statut cumulé, utile pour le suivi mensuel).
-        const { data: paiementsDuMois } = await supabase
-          .from('paiements')
-          .select('montant')
-          .eq('locataire_id', locataire.id)
-          .eq('mois_concerne', moisISO)
-
-        const totalPaye = (paiementsDuMois || []).reduce(
-          (s, p) => s + Number(p.montant || 0), 0
-        )
-
-        const logement = logements.find((l) => l.id === locataire.logement_id)
-
-        return {
-          id: locataire.id,
-          nom: locataire.nom,
-          logementNom: logement?.nom || '—',
-          loyerDu: locataire.loyer_mensuel_du,
-          totalPaye,
-          statut,
-        }
+    // 3. Batch compute solde for all locataires via new RPC
+    const locataireIds = locatairesData.map(l => l.id)
+    const { data: soldesData, error: erreurSoldes } = await supabase
+      .rpc('calculer_soldes_locataires', {
+        p_locataire_ids: locataireIds,
+        p_mois: moisISO
       })
-    )
 
-    setLignes(bilan)
+    if (erreurSoldes) {
+      setError(erreurSoldes.message)
+      setLoading(false)
+      return
+    }
+
+    // Create a map of locataire_id -> solde
+    const soldeMap = {}
+    soldesData.forEach(row => {
+      soldeMap[row.locataire_id] = Number(row.solde)
+    })
+
+    // 4. Batch fetch paiements du mois for all locataires
+    const { data: paiementsData, error: erreurPaiements } = await supabase
+      .from('paiements')
+      .select('locataire_id, montant')
+      .in('locataire_id', locataireIds)
+      .eq('mois_concerne', moisISO)
+
+    if (erreurPaiements) {
+      setError(erreurPaiements.message)
+      setLoading(false)
+      return
+    }
+
+    // Create a map of locataire_id -> totalPaye (sum of montant for the month)
+    const totalPayeMap = {}
+    paiementsData.forEach(paiement => {
+      const locId = paiement.locataire_id
+      const montant = Number(paiement.montant) || 0
+      totalPayeMap[locId] = (totalPayeMap[locId] || 0) + montant
+    })
+
+    // 5. Build final lignes array
+    const lignes = locatairesData.map(locataire => {
+      const solde = soldeMap[locataire.id] ?? 0
+      let statut = 'retard'
+      if (typeof solde === 'number') {
+        statut = solde > 0 ? 'retard' : solde === 0 ? 'paye' : 'avance'
+      } else {
+        console.warn(`Solde non numérique pour le locataire ${locataire.id}:`, solde)
+      }
+
+      const totalPaye = totalPayeMap[locataire.id] || 0
+
+      return {
+        id: locataire.id,
+        nom: locataire.nom,
+        logementNom: locataire.logements.nom,
+        loyerDu: locataire.loyer_mensuel_du,
+        totalPaye,
+        statut,
+      }
+    })
+
+    setLignes(lignes)
     setLoading(false)
-  }
+  }, [logements, moisISO])
 
   useEffect(() => {
     chargerBilan()
   }, [moisISO, logements])
 
-  useEffect(() => {
-    const handlePaiementsModifies = () => {
-      chargerBilan()
-    }
-    window.addEventListener('paiements-modifiés', handlePaiementsModifies)
-    return () => {
-      window.removeEventListener('paiements-modifiés', handlePaiementsModifies)
-    }
-  }, [chargerBilan])
+  // No longer needing paiements-modifiés event listener since real-time updates are handled via useLocataires hook
 
   const totalCollecte = lignes.reduce((s, l) => s + l.totalPaye, 0)
 
@@ -125,7 +149,7 @@ export default function BilanMensuel() {
 
     doc.setFontSize(16)
     doc.setTextColor(79, 70, 229)
-    doc.text('GesLoc — Bilan mensuel', 14, 18)
+    doc.text('MyGesLoc — Bilan mensuel', 14, 18)
 
     doc.setFontSize(10)
     doc.setTextColor(100)
@@ -140,7 +164,7 @@ export default function BilanMensuel() {
         l.logementNom,
         `${Number(l.loyerDu).toLocaleString('fr-FR')} FCFA`,
         `${l.totalPaye.toLocaleString('fr-FR')} FCFA`,
-        LABEL_STATUT[l.statut] || l.statut,
+        getStatusConfig(l.statut).label,
       ]),
       headStyles: { fillColor: [79, 70, 229] },
       styles: { fontSize: 9 },
@@ -153,7 +177,7 @@ export default function BilanMensuel() {
     <MiseEnPage>
       <div className="p-6">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <div>
+          <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-bold text-slate-900">Bilan Mensuel</h1>
             <p className="text-sm text-slate-500">Récapitulatif des loyers par mois.</p>
           </div>
@@ -198,7 +222,7 @@ export default function BilanMensuel() {
           </p>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm">
           {loading ? (
             <div className="flex items-center justify-center h-40">
               <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
@@ -208,34 +232,36 @@ export default function BilanMensuel() {
               Aucun locataire à afficher pour ce mois.
             </p>
           ) : (
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Locataire</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Logement</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Loyer dû</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Payé (ce mois)</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Statut global</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lignes.map((l) => (
-                  <tr key={l.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
-                    <td className="px-4 py-3 font-medium text-slate-800">{l.nom}</td>
-                    <td className="px-4 py-3 text-slate-600">{l.logementNom}</td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {Number(l.loyerDu).toLocaleString('fr-FR')} FCFA
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {l.totalPaye.toLocaleString('fr-FR')} FCFA
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge statut={l.statut} />
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Locataire</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Logement</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Loyer dû</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Payé (ce mois)</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Statut global</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {lignes.map((l) => (
+                    <tr key={l.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
+                      <td className="px-4 py-3 font-medium text-slate-800">{l.nom}</td>
+                      <td className="px-4 py-3 text-slate-600">{l.logementNom}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {Number(l.loyerDu).toLocaleString('fr-FR')} FCFA
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {l.totalPaye.toLocaleString('fr-FR')} FCFA
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge statut={l.statut} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>

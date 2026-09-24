@@ -1,5 +1,5 @@
 -- ============================================================
--- GesLoc — Schéma de base de données
+-- MyGesLoc — Schéma de base de données
 -- À exécuter dans Supabase : SQL Editor > New query > Run
 -- ============================================================
 

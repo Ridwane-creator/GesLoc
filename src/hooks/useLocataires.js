@@ -17,6 +17,7 @@ export function useLocataires(logementId = null) {
     setLoading(true)
     setError(null)
 
+    // 1. Fetch logements to get IDs and noms
     const { data: logements, error: erreurLogements } = await supabase
       .from('logements')
       .select('id, nom')
@@ -37,9 +38,22 @@ export function useLocataires(logementId = null) {
       return
     }
 
+    // 2. Fetch locataires with logement join to get logementNom in one query
     const { data: locatairesData, error: erreurLocataires } = await supabase
       .from('locataires')
-      .select('*')
+      .select(`
+        id,
+        nom,
+        telephone,
+        loyer_mensuel_du,
+        date_entree,
+        date_echeance,
+        rappels_actifs,
+        created_at,
+        logements!inner (
+          nom
+        )
+      `)
       .in('logement_id', idsLogements)
       .order('created_at', { ascending: false })
 
@@ -49,36 +63,48 @@ export function useLocataires(logementId = null) {
       return
     }
 
-    // Construit directement "AAAA-MM-01" sans passer par toISOString(), pour éviter
-    // tout risque de décalage de fuseau horaire (voir le bug corrigé dans BilanMensuel.jsx).
+    // 3. Batch compute solde for all locataires via new RPC
     const maintenant = new Date()
     const mm = String(maintenant.getMonth() + 1).padStart(2, '0')
     const moisCourantISO = `${maintenant.getFullYear()}-${mm}-01`
 
-    const locatairesAvecStatut = await Promise.all(
-      (locatairesData || []).map(async (locataire) => {
-        const { data: solde, error: erreurSolde } = await supabase.rpc(
-          'calculer_solde_locataire',
-          { p_locataire_id: locataire.id, p_mois: moisCourantISO }
-        )
+    const locataireIds = locatairesData.map(l => l.id)
 
-        let statut = 'retard'
-        if (!erreurSolde && typeof solde === 'number') {
-          statut = solde > 0 ? 'retard' : solde === 0 ? 'paye' : 'avance'
-        } else {
-          console.warn(`Erreur de calcul du solde pour le locataire ${locataire.id} :`, erreurSolde)
-        }
-
-        const logement = (logements || []).find((l) => l.id === locataire.logement_id)
-
-        return {
-          ...locataire,
-          logementNom: logement?.nom || '—',
-          solde,
-          statut,
-        }
+    const { data: soldesData, error: erreurSoldes } = await supabase
+      .rpc('calculer_soldes_locataires', {
+        p_locataire_ids: locataireIds,
+        p_mois: moisCourantISO
       })
-    )
+
+    if (erreurSoldes) {
+      setError(erreurSoldes.message)
+      setLoading(false)
+      return
+    }
+
+    // Create a map of locataire_id -> solde
+    const soldeMap = {}
+    soldesData.forEach(row => {
+      soldeMap[row.locataire_id] = Number(row.solde)
+    })
+
+    // 4. Build final locataires array with logementNom and solde/statut
+    const locatairesAvecStatut = locatairesData.map(locataire => {
+      const solde = soldeMap[locataire.id] ?? 0
+      let statut = 'retard'
+      if (typeof solde === 'number') {
+        statut = solde > 0 ? 'retard' : solde === 0 ? 'paye' : 'avance'
+      } else {
+        console.warn(`Solde non numérique pour le locataire ${locataire.id}:`, solde)
+      }
+
+      return {
+        ...locataire,
+        logementNom: locataire.logements.nom,
+        solde,
+        statut,
+      }
+    })
 
     setLocataires(locatairesAvecStatut)
     setLoading(false)
@@ -100,7 +126,6 @@ export function useLocataires(logementId = null) {
       .channel('paiements-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'paiements' }, () => {
         fetchLocataires()
-        window.dispatchEvent(new Event('paiements-modifiés'))
       })
     channels.push(paiementsChannel)
 

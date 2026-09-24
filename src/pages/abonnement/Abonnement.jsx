@@ -1,11 +1,12 @@
 import { useKkiapayListener, ouvrirPaiementKkiapay, confirmerAbonnement } from '../../lib/kkiapay'
 import { useState } from 'react'
 import MiseEnPage from '../../components/MiseEnPage'
+import { validatePhone, formatPhone } from '../../lib/utils/phoneUtils'
 
 const PLANS = [
-  { id: 'gratuit', nom: 'Gratuit', prix: 0, description: 'Jusqu\'à 3-4 locataires' },
-  { id: 'pro', nom: 'Pro', prix: 2000, description: 'Locataires illimités, export PDF, rappels automatiques' },
-  { id: 'agence', nom: 'Agence', prix: 8000, description: 'Tout Pro + vue agrégée multi-propriétaires' },
+  { id: 'gratuit', nom: 'Gratuit', prix: 0, description: 'Jusqu\'à 4 locataires' },
+  { id: 'pro', nom: 'Pro', prix: 2000, description: 'Locataires illimités, export PDF, rappels automatiques , jusqu\'à 4 logements' },
+  { id: 'agence', nom: 'Agence', prix: 8000, description: 'Tout Pro + vue agrégée multi-propriétaires , logements illimités' },
 ]
 
 export default function Abonnement() {
@@ -15,34 +16,7 @@ export default function Abonnement() {
   const [paysCodePaiement, setPaysCodePaiement] = useState('+225') // Défaut à Côte d'Ivoire
   const [messageErreur, setMessageErreur] = useState('')
 
-  // Fonction de validation du numéro de téléphone pour le paiement
-  const validerTelephonePaiement = (paysCode, numeroLocal) => {
-    if (!paysCode || !numeroLocal) {
-      return false;
-    }
-
-    // Construire le numéro complet pour validation
-    const telephoneComplet = `${paysCode}${numeroLocal.replace(/\s/g, '')}`;
-
-    // Autoriser seulement les chiffres et le signe + en début
-    const regexAutorises = /^[\d\+]+$/;
-    if (!regexAutorises.test(telephoneComplet)) {
-      return false;
-    }
-
-    // Vérifier la longueur selon le pays
-    const chiffres = telephoneComplet.replace(/\+/g, '');
-
-    if (paysCode === '+229') {
-      // Bénin: 8 chiffres après le +229 (total 11 avec indicatif)
-      return chiffres.length === 11 && chiffres.startsWith('229');
-    } else if (paysCode === '+225') {
-      // Côte d'Ivoire: 8 chiffres après le +225 (total 11 avec indicatif)
-      return chiffres.length === 11 && chiffres.startsWith('225');
-    }
-
-    return false;
-  };
+  // Fonction de validation du téléphone remplacée par validatePhone provenant de ../lib/utils/phoneUtils
 
   // Écoute les paiements confirmés par le widget Kkiapay (déclenché après saisie du code sur le téléphone)
   useKkiapayListener(async ({ transactionId }) => {
@@ -77,13 +51,13 @@ export default function Abonnement() {
   }
 
   function effectuerPaiement() {
-    if (!validerTelephonePaiement(paysCodePaiement, numeroPaiement)) {
+    if (!validatePhone(paysCodePaiement, numeroPaiement)) {
       setMessageErreur('Numéro de téléphone invalide. Format attendu : +229 XX XX XX XX ou +225 XX XX XX XX')
       return
     }
 
     // Construire le numéro de téléphone complet
-    const numeroComplet = `${paysCodePaiement}${numeroPaiement.replace(/\s/g, '')}`
+    const numeroComplet = formatPhone(paysCodePaiement, numeroPaiement)
 
     // Ouvrir directement le widget Kkiapay
     ouvrirPaiementKkiapay({ montant: planChoisi.prix, numero: numeroComplet })

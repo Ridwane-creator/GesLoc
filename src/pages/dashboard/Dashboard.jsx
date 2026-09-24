@@ -4,9 +4,10 @@ import { useLogements } from '../../hooks/useLogements'
 import { useLocataires } from '../../hooks/useLocataires'
 import StatusBadge from '../../components/StatusBadge'
 import MiseEnPage from '../../components/MiseEnPage'
+import { getStatusConfig } from '../../lib/utils/statusConstants'
 
 const COULEURS_DONUT = { paye: '#10b981', retard: '#ef4444', avance: '#3b82f6' }
-const LABEL_STATUT = { paye: 'Payé', retard: 'En retard', avance: 'Avance' }
+// LABEL_STATUT remplacé par getStatusConfig provenant de ../lib/utils/statusConstants
 
 
 export default function Dashboard() {
@@ -39,7 +40,7 @@ export default function Dashboard() {
   const repartition = useMemo(() => {
     return ['paye', 'retard', 'avance']
       .map((statut) => ({
-        name: LABEL_STATUT[statut],
+        name: getStatusConfig(statut).label,
         cle: statut,
         value: locataires.filter((l) => l.statut === statut).length,
       }))
@@ -63,17 +64,7 @@ export default function Dashboard() {
     return mois
   }, [totalAttendu, totalCollecte])
 
-  useEffect(() => {
-  // Listen for locataires modifications to refresh the list immediately
-  const handleLocatairesModifies = () => {
-    refresh();
-  };
-
-  window.addEventListener('locataires-modifiés', handleLocatairesModifies);
-  return () => {
-    window.removeEventListener('locataires-modifiés', handleLocatairesModifies);
-  };
-}, []); // Empty deps - listener persists for component lifetime
+  // No longer needing locataires-modifiés event listener since useLocataires hook handles real-time updates
 
   if (loading) {
     return (
@@ -183,30 +174,32 @@ export default function Dashboard() {
         {locataires.length === 0 ? (
           <p className="py-10 text-center text-sm text-slate-400">Aucun locataire à afficher.</p>
         ) : (
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/60">
-                <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Locataire</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Logement</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Loyer mensuel</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Statut</th>
-              </tr>
-            </thead>
-            <tbody>
-              {locataires.map((l) => (
-                <tr key={l.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
-                  <td className="px-4 py-3 font-medium text-slate-800">{l.nom}</td>
-                  <td className="px-4 py-3 text-slate-600">{l.logementNom}</td>
-                  <td className="px-4 py-3 text-slate-600">
-                    {Number(l.loyer_mensuel_du).toLocaleString('fr-FR')} FCFA
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge statut={l.statut} />
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/60">
+                  <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Locataire</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Logement</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Loyer mensuel</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Statut</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {locataires.map((l) => (
+                  <tr key={l.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
+                    <td className="px-4 py-3 font-medium text-slate-800">{l.nom}</td>
+                    <td className="px-4 py-3 text-slate-600">{l.logementNom}</td>
+                    <td className="px-4 py-3 text-slate-600">
+                      {Number(l.loyer_mensuel_du).toLocaleString('fr-FR')} FCFA
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge statut={l.statut} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

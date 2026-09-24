@@ -1,9 +1,14 @@
 @import "tailwindcss";
 
-/* Variables de couleurs GesLoc — à ajuster une fois la palette validée par Anaïs */
+/* Variables de couleurs MyGesLoc — à ajuster une fois la palette validée par Anaïs */
 :root {
   --color-a-jour: #16a34a;   /* vert — locataire à jour */
   --color-retard: #dc2626;   /* rouge — locataire en retard */
   --color-avance: #2563eb;   /* bleu — locataire en avance */
   --color-navy: #1f3b57;
+}
+
+/* Fluid typography - font size scales with viewport width */
+html {
+  font-size: clamp(1rem, 0.85rem + 0.4vw, 1.15rem);
 }
