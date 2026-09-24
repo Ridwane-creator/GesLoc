@@ -5,7 +5,6 @@ import { supabase } from '../../lib/supabaseClient';
 import Modal from '../../components/Modal';
 import LocataireForm from './LocataireForm';
 import { useLocataires } from '../../hooks/useLocataires';
-import StatusBadge from '../../components/StatusBadge';
 import { useAbonnement } from '../../hooks/useAbonnement';
 import ModalMiseANiveau from '../../components/ModalMiseaniveau';
 import { validatePhone, formatPhone } from '../../lib/utils/phoneUtils';
@@ -17,8 +16,7 @@ const LIMITE_LOCATAIRES_GRATUIT = 4; // Au total, tous logements confondus.
 
 const ETAT_INITIAL_FORMULAIRE = {
   nom: '',
-  paysCode: '+225',
-  numeroLocal: '',
+  telephone: '',
   loyer_mensuel_du: '',
   date_echeance: '',
 };
@@ -27,13 +25,12 @@ export default function LocatairesList() {
   const { logementId } = useParams();
 
   const [logement, setLogement] = useState(null);
+  const [locataires, setLocataires] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState(null);
-  const { locataires, loading: chargementLocataires, error: erreurLocataires, refresh: refreshLocataires } = useLocataires(logementId);
-  const { plan, estGratuit, chargement: chargementAbonnement } = useAbonnement();
 
   const [modalOuverte, setModalOuverte] = useState(false);
-  const [locataireEnEdition, setLocataireEnEdition] = useState(null);
+  const [locataireEnEdition, setLocataireEnEdition] = useState(null); // null = création
   const [formulaire, setFormulaire] = useState(ETAT_INITIAL_FORMULAIRE);
   const [enregistrement, setEnregistrement] = useState(false);
   const [erreurFormulaire, setErreurFormulaire] = useState(null);
@@ -45,6 +42,9 @@ export default function LocatairesList() {
   const [raisonBlocage, setRaisonBlocage] = useState('');
   const [copyingId, setCopyingId] = useState(null);
   const copyingTimeoutRef = useRef(null);
+  const { plan } = useAbonnement();
+  const LIMITES_LOGEMENTS = { gratuit: 1, pro: 4, agence: Infinity };
+  const limiteActuelle = LIMITES_LOGEMENTS[plan] ?? LIMITES_LOGEMENTS.gratuit;
 
   useEffect(() => {
     return () => {
@@ -55,28 +55,41 @@ export default function LocatairesList() {
   }, []);
 
   useEffect(() => {
-    async function chargerLogement() {
-      setChargement(true);
-      setErreur(null);
+    chargerDonnees();
+  }, [logementId]);
 
-      const { data: logementData, error: erreurLogement } = await supabase
-        .from('logements')
-        .select('*')
-        .eq('id', logementId)
-        .single();
+  async function chargerDonnees() {
+    setChargement(true);
+    setErreur(null);
 
-      if (erreurLogement) {
-        setErreur("Impossible de trouver ce logement.");
-        setChargement(false);
-        return;
-      }
+    const { data: logementData, error: erreurLogement } = await supabase
+      .from('logements')
+      .select('*')
+      .eq('id', logementId)
+      .single();
 
-      setLogement(logementData);
+    if (erreurLogement) {
+      setErreur("Impossible de trouver ce logement.");
       setChargement(false);
+      return;
     }
 
-    chargerLogement();
-  }, [logementId]);
+    setLogement(logementData);
+
+    const { data, error } = await supabase
+      .from('locataires')
+      .select('*')
+      .eq('logement_id', logementId)
+      .order('nom', { ascending: true });
+
+    if (error) {
+      setErreur("Impossible de charger les locataires. Réessaie dans un instant.");
+    } else {
+      setLocataires(data || []);
+    }
+
+    setChargement(false);
+  }
 
   function ouvrirModalCreation() {
     setLocataireEnEdition(null);
@@ -87,22 +100,9 @@ export default function LocatairesList() {
 
   function ouvrirModalEdition(locataire) {
     setLocataireEnEdition(locataire);
-    const telephone = locataire.telephone || '';
-    let paysCode = '+225';
-    let numeroLocal = telephone;
-
-    if (telephone.startsWith('+229')) {
-      paysCode = '+229';
-      numeroLocal = telephone.substring(4);
-    } else if (telephone.startsWith('+225')) {
-      paysCode = '+225';
-      numeroLocal = telephone.substring(4);
-    }
-
     setFormulaire({
       nom: locataire.nom,
-      paysCode,
-      numeroLocal: numeroLocal.trim(),
+      telephone: locataire.telephone || '',
       loyer_mensuel_du: locataire.loyer_mensuel_du ?? '',
       date_echeance: locataire.date_echeance || '',
     });
@@ -156,7 +156,7 @@ export default function LocatairesList() {
 
     const donnees = {
       nom: formulaire.nom.trim(),
-      telephone: telephoneComplet,
+      telephone: formulaire.telephone.trim(),
       loyer_mensuel_du: Number(formulaire.loyer_mensuel_du),
       date_echeance: formulaire.date_echeance ? Number(formulaire.date_echeance) : null,
     };
@@ -184,7 +184,7 @@ export default function LocatairesList() {
     }
 
     setModalOuverte(false);
-    refreshLocataires();
+    chargerDonnees();
   }
 
   async function gererSuppression(locataire) {
@@ -221,8 +221,7 @@ export default function LocatairesList() {
       return;
     }
 
-    refreshLocataires();
-    window.dispatchEvent(new Event('locataires-modifiés'));
+    setLocataires((precedent) => precedent.filter((l) => l.id !== locataire.id));
   }
 
   async function gererBasculeRappels(locataire) {
@@ -234,6 +233,9 @@ export default function LocatairesList() {
 
     const nouvelEtat = !locataire.rappels_actifs;
 
+    setLocataires((precedent) =>
+      precedent.map((l) => (l.id === locataire.id ? { ...l, rappels_actifs: nouvelEtat } : l))
+    );
     setRappelEnCours(locataire.id);
 
     const { error } = await supabase
@@ -244,11 +246,14 @@ export default function LocatairesList() {
     setRappelEnCours(null);
 
     if (error) {
+      setLocataires((precedent) =>
+        precedent.map((l) =>
+          l.id === locataire.id ? { ...l, rappels_actifs: !nouvelEtat } : l
+        )
+      );
       alert(
         "Impossible d'activer/désactiver les rappels. Vérifie que la colonne 'rappels_actifs' existe bien sur la table locataires."
       );
-    } else {
-      refreshLocataires();
     }
   }
 
@@ -272,7 +277,7 @@ export default function LocatairesList() {
       }
 
       // Refresh the list
-      refreshLocataires();
+      chargerDonnees();
       window.dispatchEvent(new Event('locataires-modifiés'));
     } catch (error) {
       alert(`Erreur lors de la suppression : ${error.message}`);
@@ -331,20 +336,20 @@ export default function LocatairesList() {
           </div>
         </div>
 
-        {chargementLocataires && (
+        {chargement && (
           <div className="flex items-center justify-center py-16 text-slate-400">
             <Loader2 className="w-6 h-6 animate-spin mr-2" />
             Chargement des locataires...
           </div>
         )}
 
-        {!chargementLocataires && erreurLocataires && (
+        {!chargement && erreur && (
           <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">
-            {erreurLocataires}
+            {erreur}
           </div>
         )}
 
-        {!chargementLocataires && !erreurLocataires && locataires.length === 0 && (
+        {!chargement && !erreur && locataires.length === 0 && (
           <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
             <Users className="w-10 h-10 text-slate-300 mx-auto mb-3" />
             <p className="text-slate-500 text-sm">
@@ -361,9 +366,9 @@ export default function LocatairesList() {
                   <th className="text-left px-5 py-3 font-medium">Locataire</th>
                   <th className="text-left px-5 py-3 font-medium">Loyer mensuel</th>
                   <th className="text-left px-5 py-3 font-medium">Échéance</th>
-                  <th className="text-left px-5 py-3 font-medium">Statut</th>
                   <th className="text-left px-5 py-3 font-medium">Rappels</th>
                   <th className="text-left px-5 py-3 font-medium">Lien de paiement</th>
+                  <th className="text-left px-5 py-3 font-medium">Rappel WhatsApp</th>
                   <th className="text-right px-5 py-3 font-medium">Actions</th>
                 </tr>
               </thead>
@@ -389,44 +394,39 @@ export default function LocatairesList() {
                         {locataire.date_echeance || '—'}
                       </td>
                       <td className="px-5 py-4">
-                        <StatusBadge statut={locataire.statut} />
+                        {estGratuit ? (
+                          // Free mode: Show locked padlock that shows upgrade modal when clicked
+                          <div className="flex items-center justify-center">
+                            <div
+                              onClick={() => {
+                                setRaisonBlocage('Le rappel automatique');
+                                setModalMiseANiveauOuverte(true);
+                              }}
+                              className="w-10 h-10 rounded-full border-2 border-dashed border-slate-400 flex items-center justify-center hover:bg-slate-50 transition-colors cursor-pointer"
+                            >
+                              <Lock className="w-6 h-6 text-slate-400" />
+                            </div>
+                          </div>
+                        ) : (
+                          // Paid mode: Working toggle switch
+                          <div className="flex items-center justify-center">
+                            <label className="relative inline-flex h-6 w-11 items-center">
+                              <input
+                                type="checkbox"
+                                checked={locataire.rappels_actifs}
+                                onChange={(e) => {
+                                  gererBasculeRappels(locataire);
+                                }}
+                                disabled={rappelEnCours === locataire.id}
+                                className="sr-only peer"
+                              />
+                              <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-200 dark:peer-focus:ring-indigo-100 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 transition ease-in-out duration-200">
+                                <div className={`absolute inset-0 ${locataire.rappels_actifs ? 'translate-x-5 bg-gray-100' : 'translate-x-0'} rounded-full bg-white peer-focus:ring-indigo-600 peer-hover:cursor-pointer transition ease-in-out duration-200 shadow-lg ${!locataire.rappels_actifs ? 'opacity-75' : ''}`} />
+                              </div>
+                            </label>
+                          </div>
+                        )}
                       </td>
-                      <td className="px-5 py-4">
-  {estGratuit ? (
-    // Free mode: Show locked padlock that shows upgrade modal when clicked
-    <div className="flex items-center justify-center">
-      <div
-        onClick={() => {
-          setRaisonBlocage('Le rappel automatique');
-          setModalMiseANiveauOuverte(true);
-        }}
-        className="w-10 h-10 rounded-full border-2 border-dashed border-slate-400 flex items-center justify-center hover:bg-slate-50 transition-colors cursor-pointer"
-      >
-        <Lock className="w-6 h-6 text-slate-400" />
-      </div>
-    </div>
-  ) : (
-    // Paid mode: Working toggle switch
-    <div className="flex items-center justify-center">
-      <label className="relative inline-flex h-6 w-11 items-center">
-        <input
-          type="checkbox"
-          checked={locataire.rappels_actifs}
-          onChange={(e) => {
-            gererBasculeRappels(locataire);
-          }}
-          disabled={rappelEnCours === locataire.id}
-          className="sr-only peer"
-        />
-        <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-200 dark:peer-focus:ring-indigo-100 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 transition ease-in-out duration-200">
-          <div className={`absolute inset-0 ${
-            locataire.rappels_actifs ? 'translate-x-5 bg-gray-100' : 'translate-x-0'
-          } rounded-full bg-white peer-focus:ring-indigo-600 peer-hover:cursor-pointer transition ease-in-out duration-200 shadow-lg ${!locataire.rappels_actifs ? 'opacity-75' : ''}`} />
-        </div>
-        </label>
-      </div>
-  )}
-</td>
                       <td className="px-5 py-4 text-slate-600 text-sm">
                         <div className="flex items-center gap-2">
                           <a
@@ -461,6 +461,9 @@ export default function LocatairesList() {
                         </div>
                       </td>
                       <td className="px-5 py-4">
+                        <BoutonRappelWhatsApp locataire={locataire} />
+                      </td>
+                      <td className="px-5 py-4">
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => ouvrirModalEdition(locataire)}
@@ -490,48 +493,49 @@ export default function LocatairesList() {
             </table>
           </div>
         )}
+
+        <Modal
+          ouverte={modalOuverte}
+          titre={locataireEnEdition ? 'Modifier le locataire' : 'Nouveau locataire'}
+          onFermer={fermerModal}
+        >
+          {erreurFormulaire && (
+            <div className="mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">
+              {erreurFormulaire}
+            </div>
+          )}
+
+          <form onSubmit={gererSoumission} className="space-y-4">
+            <LocataireForm formulaire={formulaire} setFormulaire={setFormulaire} />
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={fermerModal}
+                className="flex-1 py-2.5 rounded-lg border border-slate-200 text-slate-600 text-sm font-medium"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                disabled={enregistrement}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-white text-sm font-medium disabled:opacity-60"
+                style={{ background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)' }}
+              >
+                {enregistrement && <Loader2 className="w-4 h-4 animate-spin" />}
+                {locataireEnEdition ? 'Enregistrer' : 'Ajouter'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+
+        <ModalMiseANiveau
+          ouverte={modalMiseANiveauOuverte}
+          onFermer={() => setModalMiseANiveauOuverte(false)}
+          fonctionnalite={`Ajouter plus de ${limiteActuelle === Infinity ? '' : limiteActuelle} logement${limiteActuelle > 1 ? 's' : ''}`}
+          planCible={plan === 'pro' ? 'Agence' : 'Pro'}
+        />
       </div>
-
-      <Modal
-        ouverte={modalOuverte}
-        titre={locataireEnEdition ? 'Modifier le locataire' : 'Nouveau locataire'}
-        onFermer={fermerModal}
-      >
-        {erreurFormulaire && (
-          <div className="mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">
-            {erreurFormulaire}
-          </div>
-        )}
-
-        <form onSubmit={gererSoumission} className="space-y-4">
-          <LocataireForm formulaire={formulaire} setFormulaire={setFormulaire} />
-
-          <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={fermerModal}
-              className="flex-1 py-2.5 rounded-lg border border-slate-200 text-slate-600 text-sm font-medium"
-            >
-              Annuler
-            </button>
-            <button
-              type="submit"
-              disabled={enregistrement}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-white text-sm font-medium disabled:opacity-60"
-              style={{ background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)' }}
-            >
-              {enregistrement && <Loader2 className="w-4 h-4 animate-spin" />}
-              {locataireEnEdition ? 'Enregistrer' : 'Ajouter'}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      <ModalMiseANiveau
-        ouverte={modalMiseANiveauOuverte}
-        onFermer={() => setModalMiseANiveauOuverte(false)}
-        fonctionnalite={raisonBlocage}
-      />
     </div>
   );
 }

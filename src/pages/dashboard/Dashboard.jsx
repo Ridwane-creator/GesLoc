@@ -2,18 +2,22 @@ import { useState, useMemo, useEffect } from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts'
 import { useLogements } from '../../hooks/useLogements'
 import { useLocataires } from '../../hooks/useLocataires'
+import { useAbonnement } from '../../hooks/useAbonnement'
 import StatusBadge from '../../components/StatusBadge'
 import MiseEnPage from '../../components/MiseEnPage'
 import { getStatusConfig } from '../../lib/utils/statusConstants'
+import BoutonRappelWhatsApp from '../../components/BoutonRappelWhatsApp'
+import { Lock } from 'lucide-react'
+import { supabase } from '../../lib/supabaseClient'
 
 const COULEURS_DONUT = { paye: '#10b981', retard: '#ef4444', avance: '#3b82f6' }
 // LABEL_STATUT remplacé par getStatusConfig provenant de ../lib/utils/statusConstants
-
 
 export default function Dashboard() {
   const { logements } = useLogements()
   const [filtreLogement, setFiltreLogement] = useState('')
   const { locataires, loading, error, refresh } = useLocataires(filtreLogement || null)
+  const { plan, estGratuit } = useAbonnement()
 
   // Calcul du total collecté : ce qui a été effectivement payé envers le loyer dû
   // Pour chaque locataire : loyer mensuel - partie positive du solde (ce qui reste dû)
@@ -63,6 +67,35 @@ export default function Dashboard() {
     }
     return mois
   }, [totalAttendu, totalCollecte])
+
+  // State for rappel modal and toggle
+  const [modalMiseANiveauOuverte, setModalMiseANiveauOuverte] = useState(false)
+  const [raisonBlocage, setRaisonBlocage] = useState('')
+  const [rappelEnCours, setRappelEnCours] = useState(null)
+
+  // Function to toggle rappel status
+  async function gererBasculeRappels(locataire) {
+    const nouvelEtat = !locataire.rappels_actifs
+
+    // Optimistic update: we'll rely on refresh after supabase call
+    setRappelEnCours(locataire.id)
+
+    const { error } = await supabase
+      .from('locataires')
+      .update({ rappels_actifs: nouvelEtat })
+      .eq('id', locataire.id)
+
+    setRappelEnCours(null)
+
+    if (error) {
+      alert(
+        "Impossible d'activer/désactiver les rappels. Vérifie que la colonne 'rappels_actifs' existe bien sur la table locataires."
+      )
+    } else {
+      // Refresh to get updated data
+      refresh()
+    }
+  }
 
   // No longer needing locataires-modifiés event listener since useLocataires hook handles real-time updates
 
@@ -182,6 +215,7 @@ export default function Dashboard() {
                   <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Logement</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Loyer mensuel</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Statut</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase text-slate-500">Rappel</th>
                 </tr>
               </thead>
               <tbody>
@@ -194,6 +228,39 @@ export default function Dashboard() {
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge statut={l.statut} />
+                    </td>
+                    <td className="px-4 py-3">
+                      {/* Rappel toggle/padlock */}
+                      {estGratuit ? (
+                        // Free mode: Locked padlock
+                        <div className="flex items-center justify-center">
+                          <div
+                            onClick={() => {
+                              setRaisonBlocage('Le rappel automatique');
+                              setModalMiseANiveauOuverte(true);
+                            }}
+                            className="w-10 h-10 rounded-full border-2 border-dashed border-slate-400 flex items-center justify-center hover:bg-slate-50 transition-colors cursor-pointer"
+                          >
+                            <Lock className="w-6 h-6 text-slate-400" />
+                          </div>
+                        </div>
+                      ) : (
+                        // Paid mode: Toggle switch
+                        <div className="flex items-center justify-center">
+                          <label className="relative inline-flex h-6 w-11 items-center">
+                            <input
+                              type="checkbox"
+                              checked={l.rappels_actifs}
+                              onChange={(e) => gererBasculeRappels(l)}
+                              disabled={rappelEnCours === l.id}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-200 dark:peer-focus:ring-indigo-100 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 transition ease-in-out duration-200">
+                              <div className={`absolute inset-0 ${l.rappels_actifs ? 'translate-x-5 bg-gray-100' : 'translate-x-0'} rounded-full bg-white peer-focus:ring-indigo-600 peer-hover:cursor-pointer transition ease-in-out duration-200 shadow-lg ${!l.rappels_actifs ? 'opacity-75' : ''}`} />
+                            </div>
+                          </label>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
