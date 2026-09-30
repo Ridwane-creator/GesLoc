@@ -423,7 +423,7 @@ export default function NouveauPaiement() {
                   onClick={gererSuppressionTousPaiements}
                   disabled={suppressionTousEnCours || historique.length === 0}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-white text-sm font-medium"
-                  style={{ background: 'linear-gradient(135deg, #F87171 0%, #EF4444 100%)' }}
+                  style={{ background: 'linear-gradient(135deg, #FECACA 0%, #F87171 100%)' }}
                 >
                   {suppressionTousEnCours ? (
                     <>
@@ -468,12 +468,12 @@ export default function NouveauPaiement() {
                         type="button"
                         onClick={() => annulerPaiement(paiement)}
                         disabled={suppressionEnCours === paiement.id}
-                        className="flex items-center gap-1.5 text-xs font-medium text-red-500 hover:text-red-700 disabled:opacity-50"
+                        className="flex items-center justify-center w-10 h-10 bg-red-50 text-red-400 hover:bg-red-100 hover:text-white rounded-full transition-all duration-200 transform hover:scale-105"
                       >
                         {suppressionEnCours === paiement.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-4 h-4" />
                         )}
                         Annuler
                       </button>

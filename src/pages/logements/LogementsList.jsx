@@ -275,7 +275,7 @@ export default function LogementsList() {
               onClick={gererSuppressionTousLogements}
               disabled={suppressionTousEnCours || logements.length === 0}
               className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-white text-sm font-medium"
-              style={{ background: 'linear-gradient(135deg, #F87171 0%, #EF4444 100%)' }}
+              style={{ background: 'linear-gradient(135deg, #FECACA 0%, #F87171 100%)' }}
             >
               {suppressionTousEnCours ? (
                 <>
@@ -332,21 +332,21 @@ export default function LogementsList() {
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => ouvrirModalEdition(logement)}
-                        className="p-1.5 rounded-md text-slate-400 hover:text-[#4F46E5] hover:bg-indigo-50"
+                        className="flex items-center justify-center w-10 h-10 text-gray-600 hover:bg-indigo-50 hover:text-white rounded-full transition-all duration-200"
                         aria-label="Modifier"
                       >
-                        <Pencil className="w-4 h-4" />
+                        <Pencil className="w-5 h-5" />
                       </button>
                       <button
                         onClick={() => gererSuppression(logement)}
                         disabled={suppressionEnCours === logement.id}
-                        className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
+                        className="flex items-center justify-center w-10 h-10 bg-red-50 text-red-400 hover:bg-red-100 hover:text-white rounded-full transition-all duration-200 transform hover:scale-105"
                         aria-label="Supprimer"
                       >
                         {suppressionEnCours === logement.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <Loader2 className="w-5 h-5 animate-spin" />
                         ) : (
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-5 h-5" />
                         )}
                       </button>
                     </div>

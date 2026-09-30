@@ -1,14 +1,16 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, Copy, Loader2, Lock, Pencil, Phone, Plus, Trash2, Users, Link as LinkIcon } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Loader2, Lock, Pencil, Phone, Plus, Trash2, Users, Link as LinkIcon, MessageCircle, Calendar } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import Modal from '../../components/Modal';
 import LocataireForm from './LocataireForm';
 import { useLocataires } from '../../hooks/useLocataires';
 import { useAbonnement } from '../../hooks/useAbonnement';
+import { usePlan } from '../../hooks/usePlan';
 import ModalMiseANiveau from '../../components/ModalMiseaniveau';
 import { validatePhone, formatPhone } from '../../lib/utils/phoneUtils';
 import { getCurrentMonthISO } from '../../lib/utils/dateUtils';
+import { genererLienRappelWhatsApp, estVeilleDeLoyer } from '../../lib/whatsapp';
 
 // Utilisons getCurrentMonthISO() qui retourne déjà YYYY-MM-01
 
@@ -42,7 +44,8 @@ export default function LocatairesList() {
   const [raisonBlocage, setRaisonBlocage] = useState('');
   const [copyingId, setCopyingId] = useState(null);
   const copyingTimeoutRef = useRef(null);
-  const { plan } = useAbonnement();
+  const { plan, estGratuit } = useAbonnement();
+  const { peutUtiliserRappels } = usePlan();
   const LIMITES_LOGEMENTS = { gratuit: 1, pro: 4, agence: Infinity };
   const limiteActuelle = LIMITES_LOGEMENTS[plan] ?? LIMITES_LOGEMENTS.gratuit;
 
@@ -224,39 +227,7 @@ export default function LocatairesList() {
     setLocataires((precedent) => precedent.filter((l) => l.id !== locataire.id));
   }
 
-  async function gererBasculeRappels(locataire) {
-    if (estGratuit) {
-      setRaisonBlocage('Le rappel automatique');
-      setModalMiseANiveauOuverte(true);
-      return;
-    }
-
-    const nouvelEtat = !locataire.rappels_actifs;
-
-    setLocataires((precedent) =>
-      precedent.map((l) => (l.id === locataire.id ? { ...l, rappels_actifs: nouvelEtat } : l))
-    );
-    setRappelEnCours(locataire.id);
-
-    const { error } = await supabase
-      .from('locataires')
-      .update({ rappels_actifs: nouvelEtat })
-      .eq('id', locataire.id);
-
-    setRappelEnCours(null);
-
-    if (error) {
-      setLocataires((precedent) =>
-        precedent.map((l) =>
-          l.id === locataire.id ? { ...l, rappels_actifs: !nouvelEtat } : l
-        )
-      );
-      alert(
-        "Impossible d'activer/désactiver les rappels. Vérifie que la colonne 'rappels_actifs' existe bien sur la table locataires."
-      );
-    }
-  }
-
+  
   async function gererSuppressionTousLocataires() {
     const confirmation = window.confirm(
       'Supprimer définitivement tous les locataires de ce logement ? Cette action est irréversible.'
@@ -359,138 +330,160 @@ export default function LocatairesList() {
         )}
 
         {!chargement && !erreur && locataires.length > 0 && (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
-                <tr>
-                  <th className="text-left px-5 py-3 font-medium">Locataire</th>
-                  <th className="text-left px-5 py-3 font-medium">Loyer mensuel</th>
-                  <th className="text-left px-5 py-3 font-medium">Échéance</th>
-                  <th className="text-left px-5 py-3 font-medium">Rappels</th>
-                  <th className="text-left px-5 py-3 font-medium">Lien de paiement</th>
-                  <th className="text-left px-5 py-3 font-medium">Rappel WhatsApp</th>
-                  <th className="text-right px-5 py-3 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {locataires.map((locataire) => {
-                  const baseUrl = import.meta.env.VITE_APP_URL || window.location.origin;
-                  const lienPaiement = `${baseUrl}/payer/${locataire.id}/${getCurrentMonthISO()}`;
-                  return (
-                    <tr key={locataire.id} className="border-t border-slate-100">
-                      <td className="px-5 py-4">
-                        <div className="font-medium text-slate-900">{locataire.nom}</div>
-                        {locataire.telephone && (
-                          <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
-                            <Phone className="w-3 h-3" />
-                            {locataire.telephone}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-5 py-4 text-slate-700">
-                        {Number(locataire.loyer_mensuel_du).toLocaleString('fr-FR')} FCFA
-                      </td>
-                      <td className="px-5 py-4 text-slate-500">
-                        {locataire.date_echeance || '—'}
-                      </td>
-                      <td className="px-5 py-4">
-                        {estGratuit ? (
-                          // Free mode: Show locked padlock that shows upgrade modal when clicked
-                          <div className="flex items-center justify-center">
-                            <div
-                              onClick={() => {
-                                setRaisonBlocage('Le rappel automatique');
-                                setModalMiseANiveauOuverte(true);
-                              }}
-                              className="w-10 h-10 rounded-full border-2 border-dashed border-slate-400 flex items-center justify-center hover:bg-slate-50 transition-colors cursor-pointer"
-                            >
-                              <Lock className="w-6 h-6 text-slate-400" />
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                      Locataire
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                      Loyer mensuel
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                      Échéance
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                      Lien de paiement
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                      Rappel WhatsApp
+                    </th>
+                    <th className="px-6 py-4 text-right text-xs font-medium text-gray-600 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {locataires.map((locataire) => {
+                    const baseUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+                    const lienPaiement = `${baseUrl}/payer/${locataire.id}/${getCurrentMonthISO()}`;
+                    return (
+                      <tr key={locataire.id} className="hover:bg-gray-50 transition-background duration-200">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center space-x-3">
+                            <div className="flex-shrink-0">
+                              <div className="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center">
+                                <Phone className="w-5 h-5 text-indigo-500" />
+                              </div>
+                            </div>
+                            <div className="flex-1 space-x-2">
+                              <h3 className="text-base font-semibold text-gray-900">{locataire.nom}</h3>
+                              {locataire.telephone && (
+                                <p className="text-xs text-gray-500 flex items-center space-x-1">
+                                  <Phone className="w-3 h-3 text-gray-400" /> {locataire.telephone}
+                                </p>
+                              )}
                             </div>
                           </div>
-                        ) : (
-                          // Paid mode: Working toggle switch
-                          <div className="flex items-center justify-center">
-                            <label className="relative inline-flex h-6 w-11 items-center">
-                              <input
-                                type="checkbox"
-                                checked={locataire.rappels_actifs}
-                                onChange={(e) => {
-                                  gererBasculeRappels(locataire);
+                        </td>
+                        <td className="px-6 py-4 text-right text-gray-700">
+                            <p className="text-base font-medium">{Number(locataire.loyer_mensuel_du).toLocaleString('fr-FR')} <span className="text-xs text-gray-500">FCFA</span></p>
+                          </td>
+                          <td className="px-6 py-4 text-center text-gray-500">
+                            {locataire.date_echeance ? (
+                              <>
+                                <Calendar className="w-4 h-4 text-gray-400 mr-2 inline-block" />
+                                <span className="text-sm">{locataire.date_echeance}</span>
+                              </>
+                            ) : (
+                              <span className="text-xs text-gray-400 italic">—</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <div className="flex items-center justify-center space-x-2">
+                              <a
+                                href={lienPaiement}
+                                target="_blank"
+                    rel="noopener noreferrer"
+                                className="flex items-center justify-center w-10 h-10 bg-indigo-50 rounded-full hover:bg-indigo-100 transition-all duration-200"
+                                title="Lien de paiement"
+                              >
+                                <LinkIcon className="w-5 h-5 text-indigo-500" />
+                              </a>
+                              <button
+                                onClick={async () => {
+                                  await navigator.clipboard.writeText(lienPaiement);
+                                  setCopyingId(locataire.id);
+                                  if (copyingTimeoutRef.current) {
+                                    clearTimeout(copyingTimeoutRef.current);
+                                  }
+                                  copyingTimeoutRef.current = setTimeout(() => {
+                                    setCopyingId(null);
+                                  }, 1500);
                                 }}
-                                disabled={rappelEnCours === locataire.id}
-                                className="sr-only peer"
-                              />
-                              <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-200 dark:peer-focus:ring-indigo-100 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 transition ease-in-out duration-200">
-                                <div className={`absolute inset-0 ${locataire.rappels_actifs ? 'translate-x-5 bg-gray-100' : 'translate-x-0'} rounded-full bg-white peer-focus:ring-indigo-600 peer-hover:cursor-pointer transition ease-in-out duration-200 shadow-lg ${!locataire.rappels_actifs ? 'opacity-75' : ''}`} />
-                              </div>
-                            </label>
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-5 py-4 text-slate-600 text-sm">
-                        <div className="flex items-center gap-2">
-                          <a
-                            href={lienPaiement}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="w-4 h-4 text-[#4F46E5]"
-                            title="Lien de paiement"
-                          >
-                            <LinkIcon className="w-4 h-4" />
-                          </a>
-                          <button
-                            onClick={async () => {
-                              await navigator.clipboard.writeText(lienPaiement);
-                              setCopyingId(locataire.id);
-                              if (copyingTimeoutRef.current) {
-                                clearTimeout(copyingTimeoutRef.current);
-                              }
-                              copyingTimeoutRef.current = setTimeout(() => {
-                                setCopyingId(null);
-                              }, 1500);
-                            }}
-                            className="p-1 text-[#4F46E5] hover:text-[#4F46E5]/80"
-                            title="Copier le lien"
-                          >
-                            {copyingId === locataire.id ? (
-                              <Check className="w-4 h-4" />
+                                className="flex items-center justify-center w-10 h-10 text-indigo-600 hover:bg-indigo-50 hover:text-white rounded-full transition-all duration-200 transform hover:scale-105"
+                                title="Copier le lien"
+                              >
+                                {copyingId === locataire.id ? (
+                                  <Check className="w-5 h-5" />
+                                ) : (
+                                  <Copy className="w-5 h-5" />
+                                )}
+                              </button>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            {peutUtiliserRappels ? (
+                              // Paid mode: WhatsApp button that generates and sends reminder
+                              <button
+                                onClick={async () => {
+                                  // Check if it's the eve of rent
+                                  const estVeille = estVeilleDeLoyer(locataire.date_echeance);
+                                  // Generate WhatsApp link
+                                  const lienWhatsApp = await genererLienRappelWhatsApp(
+                                                locataire,
+                                                estVeille
+                                              );
+                                  // Open WhatsApp with the pre-filled message
+                                  window.open(lienWhatsApp, '_blank');
+                                }}
+                                className="flex items-center justify-center w-10 h-10 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-white rounded-full transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                title="Envoyer un rappel WhatsApp"
+                              >
+                                <MessageCircle className="w-5 h-5" />
+                              </button>
                             ) : (
-                              <Copy className="w-4 h-4" />
+                              // Free mode: Locked padlock that shows upgrade modal when clicked
+                              <button
+                                onClick={() => {
+                                  setRaisonBlocage('Le rappel automatique');
+                                  setModalMiseANiveauOuverte(true);
+                                }}
+                                className="flex items-center justify-center w-10 h-10 bg-gray-50 rounded-full border-2 border-dashed border-gray-300 hover:bg-gray-100 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                              >
+                                <Lock className="w-5 h-5 text-gray-400" />
+                              </button>
                             )}
-                          </button>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4">
-                        <BoutonRappelWhatsApp locataire={locataire} />
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => ouvrirModalEdition(locataire)}
-                            className="p-1.5 rounded-md text-slate-400 hover:text-[#4F46E5] hover:bg-indigo-50"
-                            aria-label="Modifier"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => gererSuppression(locataire)}
-                            disabled={suppressionEnCours === locataire.id}
-                            className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
-                            aria-label="Supprimer"
-                          >
-                            {suppressionEnCours === locataire.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="w-4 h-4" />
-                            )}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                          </td>
+                          <td className="px-6 py-4 text-right space-x-2">
+                            <button
+                              onClick={() => ouvrirModalEdition(locataire)}
+                              className="flex items-center justify-center w-10 h-10 text-gray-600 hover:bg-indigo-50 hover:text-white rounded-full transition-all duration-200"
+                              aria-label="Modifier"
+                            >
+                              <Pencil className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={() => gererSuppression(locataire)}
+                              disabled={suppressionEnCours === locataire.id}
+                              className="flex items-center justify-center w-10 h-10 bg-red-50 text-red-400 hover:bg-red-100 hover:text-white rounded-full transition-all duration-200 transform hover:scale-105"
+                              aria-label="Supprimer"
+                            >
+                              {suppressionEnCours === locataire.id ? (
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-5 h-5" />
+                              )}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
