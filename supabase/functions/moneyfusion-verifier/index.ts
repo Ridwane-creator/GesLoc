@@ -77,11 +77,26 @@ Deno.serve(async (req) => {
         console.error('Abonnement incohérent:', JSON.stringify(info), montant)
         return repondre({ statut, erreur: 'Paiement incohérent.' }, 400)
       }
+      // Durée : 30 jours. Si un abonnement est encore en cours, on prolonge à la suite.
+      const maintenant = new Date()
+      const { data: enCours } = await supabaseAdmin
+        .from('abonnements')
+        .select('date_fin')
+        .eq('proprietaire_id', info.userId)
+        .eq('statut', 'actif')
+        .gt('date_fin', maintenant.toISOString())
+        .order('date_fin', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      const debut = enCours?.date_fin ? new Date(enCours.date_fin) : maintenant
+      const fin = new Date(debut.getTime() + 30 * 24 * 60 * 60 * 1000)
+
       const { error } = await supabaseAdmin.from('abonnements').insert({
         proprietaire_id: info.userId,
         plan: info.plan,
         mode_paiement: 'mobile_money',
         statut: 'actif',
+        date_fin: fin.toISOString(),
         transaction_id: token,
       })
       erreurEcriture = error

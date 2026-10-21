@@ -17,11 +17,13 @@ export function useAbonnement() {
       return
     }
 
+    // Abonnement actif et non expiré (date_fin vide = sans échéance)
     const { data, error } = await supabase
       .from('abonnements')
       .select('plan')
       .eq('proprietaire_id', user.id)
       .eq('statut', 'actif')
+      .or(`date_fin.is.null,date_fin.gt.${new Date().toISOString()}`)
       .order('date_souscription', { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -39,5 +41,13 @@ export function useAbonnement() {
     chargerPlan()
   }, [])
 
-  return { plan, estGratuit: plan === 'gratuit', chargement, refresh: chargerPlan }
+  return {
+    plan,
+    chargement,
+    estGratuit: plan === 'gratuit',
+    estPro: plan === 'pro',
+    estAgence: plan === 'agence',
+    peutUtiliserRappels: plan === 'pro' || plan === 'agence',
+    refresh: chargerPlan,
+  }
 }

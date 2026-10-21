@@ -1,37 +1,19 @@
-import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '../lib/supabaseClient'
+import { useAbonnement } from './useAbonnement'
 
+// Façade conservée pour ne pas modifier les composants existants.
+// Source unique de vérité : la table `abonnements` (écrite uniquement par le serveur).
+// L'ancien champ user_metadata.plan (modifiable par l'utilisateur) n'est plus utilisé.
 export function usePlan() {
-  const [plan, setPlan] = useState('gratuit')
-  const [loading, setLoading] = useState(true)
-
-  const rafraichir = useCallback(async () => {
-    setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    setPlan(user?.user_metadata?.plan || 'gratuit')
-    setLoading(false)
-  }, [])
-
-  useEffect(() => {
-    rafraichir()
-  }, [rafraichir])
-
-  async function activerPlan(nouveauPlan) {
-    const { error } = await supabase.auth.updateUser({
-      data: { plan: nouveauPlan },
-    })
-    if (!error) setPlan(nouveauPlan)
-    return { error }
-  }
+  const { plan, chargement, estGratuit, estPro, estAgence, peutUtiliserRappels, refresh } =
+    useAbonnement()
 
   return {
     plan,
-    loading,
-    estGratuit: plan === 'gratuit',
-    estPro: plan === 'pro',
-    estAgence: plan === 'agence',
-    peutUtiliserRappels: plan === 'pro' || plan === 'agence',
-    activerPlan,
-    rafraichir,
+    loading: chargement,
+    estGratuit,
+    estPro,
+    estAgence,
+    peutUtiliserRappels,
+    rafraichir: refresh,
   }
 }

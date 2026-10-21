@@ -17,14 +17,8 @@ export default function Abonnement() {
   const [etape, setEtape] = useState('plans')
   const [numeroPaiement, setNumeroPaiement] = useState('')
   const [numeroPaiementMasque, setNumeroPaiementMasque] = useState('')
-  const [paysCodePaiement, setPaysCodePaiement] = useState('+225')
+  const [paysCodePaiement, setPaysCodePaiement] = useState('+229')
   const [messageErreur, setMessageErreur] = useState('')
-
-  // ⚠️ Le bouton "Passer à ce plan" active le plan directement (sans
-  // vraie transaction) — pratique pour tester/démontrer le déverrouillage
-  // des fonctionnalités Pro/Agence. Pour un vrai paiement, remplacer
-  // l'action par une redirection vers le lien Chariow correspondant
-  // (voir versions précédentes de ce fichier / VITE_CHARIOW_LIEN_PRO).
 
   // Fonction de validation du téléphone remplacée par validatePhone provenant de ../lib/utils/phoneUtils
 
@@ -41,12 +35,12 @@ export default function Abonnement() {
     setEtape('paiement')
     // Réinitialiser le numéro de téléphone pour le paiement
     setNumeroPaiement('')
-    setPaysCodePaiement('+225')
+    setPaysCodePaiement('+229')
   }
 
   async function effectuerPaiement() {
     if (!validatePhone(paysCodePaiement, numeroPaiement)) {
-      setMessageErreur('Numéro de téléphone invalide. Format attendu : +225 XX XX XX XX')
+      setMessageErreur(`Numéro de téléphone invalide. Format attendu : ${paysCodePaiement} XX XX XX XX`)
       return
     }
 
@@ -69,7 +63,7 @@ export default function Abonnement() {
     setEtape('plans')
     setNumeroPaiement('')
     setNumeroPaiementMasque('')
-    setPaysCodePaiement('+225')
+    setPaysCodePaiement('+229')
     setMessageErreur('')
   }
 
