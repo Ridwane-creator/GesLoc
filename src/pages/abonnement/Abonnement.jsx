@@ -2,7 +2,7 @@ import MiseEnPage from '../../components/MiseEnPage'
 import { validatePhone, formatPhone } from '../../lib/utils/phoneUtils'
 import { usePlan } from '../../hooks/usePlan'
 import { useState, useEffect } from 'react'
-import { useKkiapayListener, confirmerAbonnement, ouvrirPaiementKkiapay } from '../../lib/kkiapay'
+import { demarrerPaiementAbonnement } from '../../lib/moneyfusion'
 import { Loader2, Check, AlertTriangle, Phone, CreditCard, ArrowRight } from 'lucide-react'
 
 const PLANS = [
@@ -12,7 +12,7 @@ const PLANS = [
 ]
 
 export default function Abonnement() {
-  const { plan, activerPlan } = usePlan()
+  const { plan } = usePlan()
   const [planChoisi, setPlanChoisi] = useState(null)
   const [etape, setEtape] = useState('plans')
   const [numeroPaiement, setNumeroPaiement] = useState('')
@@ -27,22 +27,6 @@ export default function Abonnement() {
   // (voir versions précédentes de ce fichier / VITE_CHARIOW_LIEN_PRO).
 
   // Fonction de validation du téléphone remplacée par validatePhone provenant de ../lib/utils/phoneUtils
-
-  // Écoute les paiements confirmés par le widget Kkiapay (déclenché après saisie du code sur le téléphone)
-  useKkiapayListener(async ({ transactionId }) => {
-    setEtape('verification')
-    try {
-      await confirmerAbonnement({
-        transactionId,
-        plan: planChoisi.id,
-        modePaiement: 'mobile_money', // On utilise toujours Mobile Money pour le flux direct
-      })
-      setEtape('confirmation')
-    } catch (e) {
-      setMessageErreur(e.message)
-      setEtape('erreur')
-    }
-  })
 
   function choisirPlan(plan) {
     if (plan.prix === 0) {
@@ -60,18 +44,24 @@ export default function Abonnement() {
     setPaysCodePaiement('+225')
   }
 
-  function effectuerPaiement() {
+  async function effectuerPaiement() {
     if (!validatePhone(paysCodePaiement, numeroPaiement)) {
       setMessageErreur('Numéro de téléphone invalide. Format attendu : +225 XX XX XX XX')
       return
     }
 
-    // Construire le numéro de téléphone complet
+    // Numéro complet (ex: +22501020304)
     const numeroComplet = formatPhone(paysCodePaiement, numeroPaiement)
 
-    // Ouvrir directement le widget Kkiapay
-    ouvrirPaiementKkiapay({ montant: planChoisi.prix, numero: numeroComplet })
+    setMessageErreur('')
     setEtape('verification')
+    try {
+      // Le prix est décidé côté serveur ; on est redirigé vers MoneyFusion
+      await demarrerPaiementAbonnement({ plan: planChoisi.id, numero: numeroComplet })
+    } catch (e) {
+      setMessageErreur(e.message)
+      setEtape('erreur')
+    }
   }
 
   function recommencer() {

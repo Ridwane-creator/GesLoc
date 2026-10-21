@@ -7,6 +7,7 @@ import LocatairesList from './pages/locataires/LocatairesList'
 import Dashboard from './pages/dashboard/Dashboard'
 import PaiementForm from './pages/paiements/PaiementForm'
 import PaiementPublic from './pages/PaiementPublic'
+import PaiementRetour from './pages/PaiementRetour'
 import RouteProtegee from './components/RouteProtegee'
 import BilanMensuel from './pages/dashboard/BilanMensuel'
 import Abonnement from './pages/abonnement/Abonnement'
@@ -22,6 +23,7 @@ export default function AppRoutes() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/payer/:locataireId/:moisConcerne" element={<PaiementPublic />} />
+        <Route path="/paiement/retour" element={<PaiementRetour />} />
 
         <Route path="/logements" element={<RouteProtegee><LogementsList /></RouteProtegee>} />
         <Route path="/locataires/:logementId" element={<RouteProtegee><LocatairesList /></RouteProtegee>} />

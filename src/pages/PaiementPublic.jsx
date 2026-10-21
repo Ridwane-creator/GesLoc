@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
-import { ouvrirPaiementKkiapay, useKkiapayListener } from '../lib/kkiapay';
-import { CheckCircle2, Loader2, User } from 'lucide-react';
+import { demarrerPaiementLoyer } from '../lib/moneyfusion';
+import { Loader2, User } from 'lucide-react';
 import { formatMonthLabel } from '../lib/utils/dateUtils';
 
 export default function PaiementPublic() {
@@ -15,12 +15,10 @@ export default function PaiementPublic() {
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState(null);
   const [paiementEnCours, setPaiementEnCours] = useState(false);
-  const [paiementReussi, setPaiementReussi] = useState(false);
 
   // Set page title and log mount
   useEffect(() => {
     document.title = 'MyGesLoc';
-    console.log('PaiementPublic mounted');
   }, []);
 
   // Fetch locataire info
@@ -51,66 +49,25 @@ export default function PaiementPublic() {
       });
   }, [cleanLocataireId, cleanMoisConcerne]);
 
-  useKkiapayListener((detail) => {
-    setPaiementEnCours(true);
-
-    if (!detail || !detail.transaction_id) {
-      setErreur('Détails de paiement incomplets reçus.');
-      setPaiementEnCours(false);
-      return;
-    }
-
-    supabase.functions.invoke('verify-kkiapay-paiement-locataire', {
-      body: {
-        transactionId: detail.transaction_id,
-        locataireId: cleanLocataireId,
-        moisConcerne: cleanMoisConcerne,
-      },
-    })
-      .then(({ data, error }) => {
-        if (error) {
-          setErreur(`Vérification échouée : ${error.message}`);
-          setPaiementEnCours(false);
-          return;
-        }
-
-        const succes = data && (data.succes === true || data.success === true);
-
-        if (succes) {
-          setPaiementReussi(true);
-        } else {
-          setErreur('Paiement non confirmé par nos systèmes.');
-          setPaiementEnCours(false);
-        }
-      })
-      .catch((err) => {
-        setErreur(`Erreur lors de la vérification : ${err.message}`);
-        setPaiementEnCours(false);
-      });
-  });
-
   // Set page title
   useEffect(() => {
     document.title = 'MyGesLoc';
   }, []);
 
-  const gererPaiement = () => {
-    if (!locataire) return;
+  const gererPaiement = async () => {
+    if (!locataire || paiementEnCours) return;
 
-    const montantAPayer = locataire.loyer_mensuel_du;
-
-    if (typeof montantAPayer !== 'number' || isNaN(montantAPayer) || montantAPayer <= 0) {
-      setErreur('Montant de paiement invalide.');
-      return;
-    }
-
+    setPaiementEnCours(true);
+    setErreur(null);
     try {
-      ouvrirPaiementKkiapay({
-        montant: montantAPayer,
-        numero: locataire.telephone?.trim() || undefined,
+      // Le montant est décidé côté serveur ; on est redirigé vers MoneyFusion
+      await demarrerPaiementLoyer({
+        locataireId: cleanLocataireId,
+        moisConcerne: cleanMoisConcerne,
       });
     } catch (error) {
-      setErreur(`Erreur lors de l'ouverture du widget de paiement : ${error.message}`);
+      setErreur(error.message);
+      setPaiementEnCours(false);
     }
   };
 
@@ -151,28 +108,6 @@ export default function PaiementPublic() {
     );
   }
 
-  if (paiementReussi) {
-    return (
-      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6">
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 max-w-md text-center">
-          <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-slate-900 mb-2">Paiement effectué avec succès</h2>
-          <p className="text-slate-500 text-sm mb-6">
-            Merci {locataire.nom} ! Votre paiement de {Number(locataire.loyer_mensuel_du).toLocaleString('fr-FR')} FCFA
-            pour {formatMonthLabel(cleanMoisConcerne)} a bien été enregistré.
-          </p>
-          <button
-            onClick={() => window.location.href = '/'}
-            className="w-full py-2.5 rounded-lg border border-slate-200 text-slate-600 text-sm font-medium"
-          >
-            Retour à l'accueil
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  console.log('Rendering payment form with locataire:', locataire);
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-6 sm:p-8">
       <div className="max-w-2xl mx-auto">
