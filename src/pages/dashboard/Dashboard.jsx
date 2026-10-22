@@ -111,7 +111,7 @@ export default function Dashboard() {
 
   return (
     <MiseEnPage>
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">

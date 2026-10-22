@@ -73,7 +73,7 @@ export default function Abonnement() {
         {/* Header Section */}
         {etape === 'plans' && (
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Abonnement</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Abonnement</h1>
             <p className="mt-2 text-gray-600">Choisis le plan adapté à la taille de ton patrimoine.</p>
           </div>
         )}
@@ -85,7 +85,7 @@ export default function Abonnement() {
               const estActuel = plan === planItem.id
               return (
                 <div key={planItem.id} className="relative group">
-                  <div className="relative flex flex-col items-center rounded-2xl border-2 border-transparent bg-white p-8 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 hover:border-indigo-500">
+                  <div className="relative flex flex-col items-center rounded-2xl border-2 border-transparent bg-white p-6 sm:p-8 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 hover:border-indigo-500">
                     {/* Badge for current plan */}
                     {estActuel && (
                       <div className="absolute -top-3 left-3 bg-indigo-600 text-white text-xs font-semibold px-3 py-1 rounded-full">
@@ -152,10 +152,10 @@ export default function Abonnement() {
 
         {/* Payment Section */}
         {etape === 'paiement' && (
-          <div className="bg-white border-2 border-transparent rounded-2xl shadow-lg p-8 max-w-2xl mx-auto">
+          <div className="bg-white border-2 border-transparent rounded-2xl shadow-lg p-5 sm:p-8 max-w-2xl mx-auto">
             <div className="space-y-6">
               <div className="flex items-center mb-6">
-                <div className="flex items-center justify-center w-16 h-16 rounded-full bg-indigo-50">
+                <div className="flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 shrink-0 rounded-full bg-indigo-50">
                   <CreditCard className="w-6 h-6 text-indigo-500" />
                 </div>
                 <div className="ml-4">
@@ -178,7 +178,7 @@ export default function Abonnement() {
                       setPaysCodePaiement(e.target.value);
                       setNumeroPaiement(''); // Reset number when changing country
                     }}
-                    className="w-20 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-indigo-600"
+                    className="w-24 shrink-0 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-indigo-600"
                   >
                     <option value="+225">+225 (Côte d'Ivoire)</option>
                     <option value="+229">+229 (Bénin)</option>
@@ -195,7 +195,7 @@ export default function Abonnement() {
                     }}
                     placeholder="01 XX XX XX XX"
                     inputMode="tel"
-                    className="w-44 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-indigo-600 bg-transparent"
+                    className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-indigo-600 bg-transparent"
                   />
                 </div>
 

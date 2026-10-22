@@ -62,7 +62,7 @@ export default function Sidebar() {
       </div>
 
       {/* Sidebar fixe, desktop uniquement */}
-      <aside className="hidden md:flex h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-white">
+      <aside className="hidden md:sticky md:top-0 md:flex h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-white">
         <ContenuNavigation />
       </aside>
 
@@ -73,7 +73,7 @@ export default function Sidebar() {
             className="absolute inset-0 bg-black/40"
             onClick={() => setMenuOuvert(false)}
           />
-          <aside className="absolute left-0 top-0 h-screen w-64 flex flex-col bg-white shadow-xl">
+          <aside className="absolute left-0 top-0 h-dvh w-64 max-w-[85vw] flex flex-col bg-white shadow-xl overflow-y-auto">
             <div className="flex items-center justify-end px-4 py-3">
               <button
                 onClick={() => setMenuOuvert(false)}

@@ -261,7 +261,7 @@ export default function LocatairesList() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-6 sm:p-8">
+    <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-8">
       <div className="max-w-5xl mx-auto">
         <RouterLink
           to="/logements"
@@ -271,7 +271,7 @@ export default function LocatairesList() {
           Retour aux logements
         </RouterLink>
 
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">
               Locataires {logement ? `— ${logement.nom}` : ''}
@@ -280,7 +280,7 @@ export default function LocatairesList() {
               Gère les locataires de ce logement.
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={ouvrirModalCreation}
               className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-white text-sm font-medium"
@@ -335,8 +335,8 @@ export default function LocatairesList() {
         {!chargement && !erreur && locataires.length > 0 && (
           <div className="rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
+              <table className="block md:table w-full text-sm">
+                <thead className="hidden md:table-header-group bg-gray-50">
                   <tr>
                     <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                       Locataire
@@ -358,13 +358,13 @@ export default function LocatairesList() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="block md:table-row-group divide-y divide-gray-100">
                   {locataires.map((locataire) => {
                     const baseUrl = import.meta.env.VITE_APP_URL || window.location.origin;
                     const lienPaiement = `${baseUrl}/payer/${locataire.id}/${getCurrentMonthISO()}`;
                     return (
-                      <tr key={locataire.id} className="hover:bg-gray-50 transition-background duration-200">
-                        <td className="px-6 py-4">
+                      <tr key={locataire.id} className="block md:table-row py-2 md:py-0 hover:bg-gray-50 transition-background duration-200">
+                        <td className="block px-4 pt-3 pb-1 md:table-cell md:px-6 md:py-4">
                           <div className="flex items-center space-x-3">
                             <div className="flex-shrink-0">
                               <div className="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center">
@@ -381,10 +381,10 @@ export default function LocatairesList() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-right text-gray-700">
+                        <td data-label="Loyer mensuel" className="flex items-center justify-between gap-3 px-4 py-2 md:table-cell md:px-6 md:py-4 before:content-[attr(data-label)] before:text-xs before:font-medium before:uppercase before:tracking-wider before:text-gray-500 md:before:hidden md:text-right text-gray-700">
                             <p className="text-base font-medium">{Number(locataire.loyer_mensuel_du).toLocaleString('fr-FR')} <span className="text-xs text-gray-500">FCFA</span></p>
                           </td>
-                          <td className="px-6 py-4 text-center text-gray-500">
+                          <td data-label="Échéance" className="flex items-center justify-between gap-3 px-4 py-2 md:table-cell md:px-6 md:py-4 before:content-[attr(data-label)] before:text-xs before:font-medium before:uppercase before:tracking-wider before:text-gray-500 md:before:hidden md:text-center text-gray-500">
                             {locataire.date_echeance ? (
                               <>
                                 <Calendar className="w-4 h-4 text-gray-400 mr-2 inline-block" />
@@ -394,7 +394,7 @@ export default function LocatairesList() {
                               <span className="text-xs text-gray-400 italic">—</span>
                             )}
                           </td>
-                          <td className="px-6 py-4 text-center">
+                          <td data-label="Lien de paiement" className="flex items-center justify-between gap-3 px-4 py-2 md:table-cell md:px-6 md:py-4 before:content-[attr(data-label)] before:text-xs before:font-medium before:uppercase before:tracking-wider before:text-gray-500 md:before:hidden md:text-center">
                             <div className="flex items-center justify-center space-x-2">
                               <a
                                 href={lienPaiement}
@@ -427,7 +427,7 @@ export default function LocatairesList() {
                               </button>
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-center">
+                          <td data-label="Rappel WhatsApp" className="flex items-center justify-between gap-3 px-4 py-2 md:table-cell md:px-6 md:py-4 before:content-[attr(data-label)] before:text-xs before:font-medium before:uppercase before:tracking-wider before:text-gray-500 md:before:hidden md:text-center">
                             {peutUtiliserRappels ? (
                               // Paid mode: WhatsApp button that generates and sends reminder
                               <button
@@ -460,7 +460,7 @@ export default function LocatairesList() {
                               </button>
                             )}
                           </td>
-                          <td className="px-6 py-4 text-right space-x-2">
+                          <td className="flex items-center justify-end gap-2 px-4 pt-1 pb-3 md:table-cell md:px-6 md:py-4 md:text-right md:space-x-2">
                             <button
                               onClick={() => ouvrirModalEdition(locataire)}
                               className="flex items-center justify-center w-10 h-10 text-gray-600 hover:bg-indigo-50 hover:text-white rounded-full transition-all duration-200"

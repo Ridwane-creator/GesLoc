@@ -175,7 +175,7 @@ export default function BilanMensuel() {
 
   return (
     <MiseEnPage>
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-bold text-slate-900">Bilan Mensuel</h1>

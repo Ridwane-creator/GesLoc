@@ -245,7 +245,7 @@ export default function LogementsList() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-6 sm:p-8">
+    <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-8">
       <div className="max-w-5xl mx-auto">
         <button
           onClick={() => navigate('/dashboard')}
@@ -255,14 +255,14 @@ export default function LogementsList() {
           Retour
         </button>
 
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Logements</h1>
             <p className="text-slate-500 text-sm mt-1">
               Gère la liste de tes biens immobiliers.
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={gererClicNouveauLogement}
               className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-white text-sm font-medium"
