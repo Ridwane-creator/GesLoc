@@ -1,8 +1,21 @@
 -- ============================================================
--- MyGesLoc — Étape 4 : sécurisation SQL
--- À exécuter dans Supabase > SQL Editor, SECTION PAR SECTION
--- (A, puis B, puis C). Chaque section est ré-exécutable sans risque.
+-- MyGesLoc — migrations de sécurité (à conserver dans le repo)
+-- Ordre appliqué : 1) abonnements + anti-rejeu, puis A, B, C.
+-- Toutes les parties sont ré-exécutables sans risque.
 -- ============================================================
+
+
+-- ============================================================
+-- ÉTAPE 1 — Abonnements écrits uniquement par le serveur + anti-rejeu
+-- ============================================================
+
+-- Plus d'écriture client sur abonnements (seules les edge functions écrivent)
+drop policy if exists "Abonnement créé par l'utilisateur connecté" on abonnements;
+drop policy if exists "Abonnement modifiable par son propriétaire" on abonnements;
+
+-- Anti-rejeu : une même transaction ne peut être enregistrée qu'une fois
+alter table abonnements add column if not exists transaction_id text unique;
+alter table paiements   add column if not exists transaction_id text unique;
 
 
 -- ============================================================

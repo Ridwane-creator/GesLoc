@@ -1,52 +1,76 @@
 // src/lib/utils/phoneUtils.js
-// Centralized phone validation and formatting for MyGesLoc
+// Validation et formatage des numéros de téléphone MyGesLoc.
+//
+// Plans de numérotation actuels (10 chiffres) :
+//   - Bénin (+229)         : 01 XX XX XX XX  (le préfixe 01 est obligatoire depuis le 30/11/2024)
+//   - Côte d'Ivoire (+225) : 10 chiffres
+// Un ancien numéro béninois à 8 chiffres est converti automatiquement en ajoutant 01.
+
+const PAYS = {
+  '+229': { nom: 'Bénin', longueurLocale: 10, prefixeObligatoire: '01' },
+  '+225': { nom: "Côte d'Ivoire", longueurLocale: 10 },
+}
+
+function chiffres(valeur) {
+  return String(valeur ?? '').replace(/\D/g, '')
+}
 
 /**
- * Validates a phone number given country code and local number.
- * Supports +229 (Bénin) and +225 (Côte d'Ivoire).
- * @param {string} paysCode - e.g. '+229' or '+225'
- * @param {string} numeroLocal - local number with spaces, e.g. 'XX XX XX XX'
- * @returns {boolean} true if valid
+ * Numéro local normalisé (chiffres uniquement).
+ * Bénin : un numéro à 8 chiffres reçoit le préfixe 01.
+ */
+export function normaliserNumeroLocal(paysCode, numeroLocal) {
+  let local = chiffres(numeroLocal)
+  if (paysCode === '+229' && local.length === 8) local = '01' + local
+  return local
+}
+
+/**
+ * @param {string} paysCode - '+229' ou '+225'
+ * @param {string} numeroLocal - numéro local, avec ou sans espaces
+ * @returns {boolean}
  */
 export function validatePhone(paysCode, numeroLocal) {
-  if (!paysCode || !numeroLocal) return false;
+  const pays = PAYS[paysCode]
+  if (!pays || !numeroLocal) return false
 
-  // Build full number without spaces
-  const telephoneComplet = `${paysCode}${numeroLocal.replace(/\s/g, '')}`;
-
-  // Only digits and leading plus allowed
-  const regexAutorises = /^[\d\+]+$/;
-  if (!regexAutorises.test(telephoneComplet)) return false;
-
-  // Remove leading plus for digit checks
-  const chiffres = telephoneComplet.replace(/\+/g, '');
-
-  if (paysCode === '+229') {
-    // Bénin: 11 digits total, starts with 229
-    return chiffres.length === 11 && chiffres.startsWith('229');
-  } else if (paysCode === '+225') {
-    // Côte d'Ivoire: 11 digits total, starts with 225
-    return chiffres.length === 11 && chiffres.startsWith('225');
-  }
-  return false;
+  const local = normaliserNumeroLocal(paysCode, numeroLocal)
+  if (local.length !== pays.longueurLocale) return false
+  if (pays.prefixeObligatoire && !local.startsWith(pays.prefixeObligatoire)) return false
+  return true
 }
 
 /**
- * Formats a phone number to international format without spaces.
- * @param {string} paysCode - e.g. '+229' or '+225'
- * @param {string} numeroLocal - local number with spaces
- * @returns {string} e.g. '+229XXXXXXXXX' or empty string if invalid
+ * Numéro au format international sans espaces, ex. '+2290197123456'.
+ * Retourne '' si le numéro est invalide.
  */
 export function formatPhone(paysCode, numeroLocal) {
-  if (!validatePhone(paysCode, numeroLocal)) return '';
-  return `${paysCode}${numeroLocal.replace(/\s/g, '')}`;
+  if (!validatePhone(paysCode, numeroLocal)) return ''
+  return `${paysCode}${normaliserNumeroLocal(paysCode, numeroLocal)}`
 }
 
 /**
- * Returns the default country code for the user's locale (fallback to +225)
- * @returns {string}
+ * Découpe un numéro enregistré (ex. '+2290197123456' ou ancien '+22997123456')
+ * en { paysCode, numeroLocal } pour préremplir le formulaire.
+ */
+export function decomposerTelephone(telephone) {
+  const brut = String(telephone ?? '').trim()
+  const nb = chiffres(brut)
+
+  if (brut.startsWith('+')) {
+    for (const paysCode of Object.keys(PAYS)) {
+      const indicatif = paysCode.slice(1)
+      if (nb.startsWith(indicatif) && nb.length > indicatif.length) {
+        return { paysCode, numeroLocal: normaliserNumeroLocal(paysCode, nb.slice(indicatif.length)) }
+      }
+    }
+  }
+  return { paysCode: '+229', numeroLocal: normaliserNumeroLocal('+229', nb) }
+}
+
+/**
+ * Indicatif par défaut (le projet cible le Bénin).
  */
 export function getDefaultPaysCode() {
-  // Could be based on user prefs; default to Côte d'Ivoire as in original code
-  return '+225';
+  return '+229'
 }

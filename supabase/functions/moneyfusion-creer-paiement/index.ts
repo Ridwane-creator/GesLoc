@@ -24,6 +24,15 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+// Numéro local à 10 chiffres (ex. 0197123456) à partir de +2290197123456.
+// Un ancien numéro béninois à 8 chiffres reçoit le préfixe 01.
+function numeroLocal(brut: unknown): string {
+  let n = String(brut ?? '').replace(/\D/g, '')
+  if ((n.startsWith('229') || n.startsWith('225')) && n.length >= 11) n = n.slice(3)
+  if (n.length === 8) n = '01' + n
+  return n
+}
+
 function repondre(corps: unknown, status = 200) {
   return new Response(JSON.stringify(corps), {
     status,
@@ -66,8 +75,8 @@ Deno.serve(async (req) => {
       const { data: { user }, error } = await supabaseClient.auth.getUser()
       if (error || !user) return repondre({ erreur: 'Utilisateur non authentifié.' }, 401)
 
-      numero = String(body.numero ?? '').replace(/\D/g, '')
-      if (numero.length < 8) return repondre({ erreur: 'Numéro de téléphone invalide.' }, 400)
+      numero = numeroLocal(body.numero)
+      if (numero.length !== 10) return repondre({ erreur: 'Numéro de téléphone invalide.' }, 400)
 
       montant = PRIX_PLANS[plan]
       libelle = `Abonnement MyGesLoc ${plan}`
@@ -86,8 +95,8 @@ Deno.serve(async (req) => {
         .single()
       if (error || !loc) return repondre({ erreur: 'Locataire introuvable.' }, 404)
 
-      numero = String(loc.telephone ?? '').replace(/\D/g, '')
-      if (numero.length < 8) {
+      numero = numeroLocal(loc.telephone)
+      if (numero.length !== 10) {
         return repondre({ erreur: "Le locataire n'a pas de numéro de téléphone valide." }, 400)
       }
 

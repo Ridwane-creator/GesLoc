@@ -19,7 +19,7 @@ export default function LocataireForm({ formulaire, setFormulaire }) {
         <label className="block text-sm font-medium text-slate-700 mb-1">Téléphone</label>
         <div className="flex gap-3">
           <select
-            value={formulaire.paysCode || '+225'}
+            value={formulaire.paysCode || '+229'}
             onChange={(e) => setFormulaire((f) => ({ ...f, paysCode: e.target.value }))}
             className="flex-1 rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-600"
           >
@@ -29,14 +29,15 @@ export default function LocataireForm({ formulaire, setFormulaire }) {
           <input
             type="text"
             value={formulaire.numeroLocal || ''}
-            onChange={(e) => setFormulaire((f) => ({ ...f, numeroLocal: e.target.value }))}
-            placeholder="XX XX XX XX"
+            onChange={(e) => setFormulaire((f) => ({ ...f, numeroLocal: e.target.value.replace(/[^0-9 ]/g, '').slice(0, 14) }))}
+            inputMode="tel"
+            placeholder="01 XX XX XX XX"
             className="flex-1 rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-600"
           />
         </div>
         {(!formulaire.paysCode || !formulaire.numeroLocal || !validatePhone(formulaire.paysCode, formulaire.numeroLocal)) && formulaire.paysCode !== undefined && (
           <p className="text-sm text-red-600 mt-1">
-            Numéro de téléphone invalide. Format attendu : +229 XX XX XX XX ou +225 XX XX XX XX
+            Numéro invalide. Bénin : 01 + 8 chiffres (ex. 01 97 12 34 56). Côte d'Ivoire : 10 chiffres.
           </p>
         )}
       </div>

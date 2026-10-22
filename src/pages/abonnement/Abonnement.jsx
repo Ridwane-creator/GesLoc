@@ -40,7 +40,7 @@ export default function Abonnement() {
 
   async function effectuerPaiement() {
     if (!validatePhone(paysCodePaiement, numeroPaiement)) {
-      setMessageErreur(`Numéro de téléphone invalide. Format attendu : ${paysCodePaiement} XX XX XX XX`)
+      setMessageErreur(`Numéro de téléphone invalide. Format attendu : ${paysCodePaiement} XX XX XX XX XX`)
       return
     }
 
@@ -188,30 +188,19 @@ export default function Abonnement() {
                     value={numeroPaiementMasque || ''}
                     onChange={(e) => {
                       const value = e.target.value.replace(/[^0-9]/g, '');
-                      const limitedValue = value.slice(0, 8); // Max 8 digits for XX XX XX XX
+                      const limitedValue = value.slice(0, 10); // 10 chiffres (Bénin : 01 + 8 chiffres)
                       setNumeroPaiement(limitedValue);
-
-                      // Apply masking: XX XX XX XX (groups of 2)
-                      if (limitedValue.length === 0) {
-                        setNumeroPaiementMasque('');
-                      } else if (limitedValue.length <= 2) {
-                        setNumeroPaiementMasque(limitedValue);
-                      } else if (limitedValue.length <= 4) {
-                        setNumeroPaiementMasque(`${limitedValue.slice(0, 2)} ${limitedValue.slice(2)}`);
-                      } else if (limitedValue.length <= 6) {
-                        setNumeroPaiementMasque(`${limitedValue.slice(0, 2)} ${limitedValue.slice(2, 4)} ${limitedValue.slice(4)}`);
-                      } else {
-                        setNumeroPaiementMasque(`${limitedValue.slice(0, 2)} ${limitedValue.slice(2, 4)} ${limitedValue.slice(4, 6)} ${limitedValue.slice(6, 8)}`);
-                      }
+                      // Masque : groupes de 2 chiffres
+                      setNumeroPaiementMasque(limitedValue.replace(/(\d{2})(?=\d)/g, '$1 '));
                     }}
-                    placeholder="XX XX XX XX"
+                    placeholder="01 XX XX XX XX"
                     inputMode="tel"
-                    className="w-36 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-indigo-600 bg-transparent"
+                    className="w-44 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-indigo-600 bg-transparent"
                   />
                 </div>
 
                 <p className="text-xs text-gray-500 mt-2">
-                  Format attendu : {paysCodePaiement} XX XX XX XX
+                  Format attendu : {paysCodePaiement} XX XX XX XX XX
                 </p>
               </div>
 

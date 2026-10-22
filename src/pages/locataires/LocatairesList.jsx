@@ -8,7 +8,7 @@ import { useLocataires } from '../../hooks/useLocataires';
 import { useAbonnement } from '../../hooks/useAbonnement';
 import { usePlan } from '../../hooks/usePlan';
 import ModalMiseANiveau from '../../components/ModalMiseaniveau';
-import { validatePhone, formatPhone } from '../../lib/utils/phoneUtils';
+import { validatePhone, formatPhone, decomposerTelephone } from '../../lib/utils/phoneUtils';
 import { getCurrentMonthISO } from '../../lib/utils/dateUtils';
 import { genererLienRappelWhatsApp, estVeilleDeLoyer } from '../../lib/whatsapp';
 
@@ -18,7 +18,8 @@ const LIMITE_LOCATAIRES_GRATUIT = 4; // Au total, tous logements confondus.
 
 const ETAT_INITIAL_FORMULAIRE = {
   nom: '',
-  telephone: '',
+  paysCode: '+229',
+  numeroLocal: '',
   loyer_mensuel_du: '',
   date_echeance: '',
 };
@@ -103,9 +104,11 @@ export default function LocatairesList() {
 
   function ouvrirModalEdition(locataire) {
     setLocataireEnEdition(locataire);
+    const { paysCode, numeroLocal } = decomposerTelephone(locataire.telephone);
     setFormulaire({
       nom: locataire.nom,
-      telephone: locataire.telephone || '',
+      paysCode,
+      numeroLocal,
       loyer_mensuel_du: locataire.loyer_mensuel_du ?? '',
       date_echeance: locataire.date_echeance || '',
     });
@@ -132,7 +135,7 @@ export default function LocatairesList() {
       return;
     }
     if (!validatePhone(formulaire.paysCode, formulaire.numeroLocal)) {
-      setErreurFormulaire('Le numéro de téléphone est invalide. Format attendu : +229 XX XX XX XX ou +225 XX XX XX XX');
+      setErreurFormulaire('Le numéro de téléphone est invalide. Bénin : 01 + 8 chiffres (ex. 01 97 12 34 56). Côte d\'Ivoire : 10 chiffres.');
       return;
     }
 
@@ -159,7 +162,7 @@ export default function LocatairesList() {
 
     const donnees = {
       nom: formulaire.nom.trim(),
-      telephone: formulaire.telephone.trim(),
+      telephone: telephoneComplet,
       loyer_mensuel_du: Number(formulaire.loyer_mensuel_du),
       date_echeance: formulaire.date_echeance ? Number(formulaire.date_echeance) : null,
     };
